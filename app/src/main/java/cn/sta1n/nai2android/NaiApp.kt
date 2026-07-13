@@ -1,17 +1,26 @@
 package cn.sta1n.nai2android
 
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,16 +29,49 @@ fun NaiApp(viewModel: NaiViewModel) {
         modifier = Modifier.fillMaxSize(),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Nai2Android") },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors()
+                navigationIcon = {
+                    Surface(
+                        modifier = Modifier.padding(start = 16.dp),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Icon(
+                            Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            tint = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                },
+                title = {
+                    Text(
+                        screenTitle(viewModel.screen),
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                    )
+                },
+                actions = {
+                    if (viewModel.balance != null) {
+                        Text(
+                            "${viewModel.balance} 点",
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.padding(end = 16.dp)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background
+                )
             )
         },
         bottomBar = {
-            NavigationBar {
-                NavigationItem(AppScreen.CREATE, "创作", "✦", viewModel)
-                NavigationItem(AppScreen.GALLERY, "图库", "▦", viewModel)
-                NavigationItem(AppScreen.PRESETS, "预设", "☷", viewModel)
-                NavigationItem(AppScreen.SETTINGS, "设置", "⚙", viewModel)
+            NavigationBar(
+                containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp
+            ) {
+                NavigationItem(AppScreen.CREATE, "创作", Icons.Filled.AutoAwesome, viewModel)
+                NavigationItem(AppScreen.GALLERY, "图库", Icons.Filled.Collections, viewModel)
+                NavigationItem(AppScreen.PRESETS, "预设", Icons.Filled.Tune, viewModel)
+                NavigationItem(AppScreen.SETTINGS, "设置", Icons.Filled.Settings, viewModel)
             }
         }
     ) { paddingValues ->
@@ -49,10 +91,27 @@ fun NaiApp(viewModel: NaiViewModel) {
 private fun NavigationItem(
     screen: AppScreen,
     label: String,
-    glyph: String,
+    icon: ImageVector,
     viewModel: NaiViewModel
 ) {
-    TextButton(onClick = { viewModel.selectScreen(screen) }) {
-        Text(if (viewModel.screen == screen) "$glyph $label" else label)
-    }
+    NavigationBarItem(
+        selected = viewModel.screen == screen,
+        onClick = { viewModel.selectScreen(screen) },
+        icon = { Icon(icon, contentDescription = label) },
+        label = { Text(label) },
+        colors = NavigationBarItemDefaults.colors(
+            selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
+            selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+            indicatorColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer,
+            unselectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+            unselectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    )
+}
+
+private fun screenTitle(screen: AppScreen): String = when (screen) {
+    AppScreen.CREATE -> "Nai2 Studio"
+    AppScreen.GALLERY -> "应用图库"
+    AppScreen.PRESETS -> "我的预设"
+    AppScreen.SETTINGS -> "连接设置"
 }
