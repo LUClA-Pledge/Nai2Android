@@ -1,4 +1,4 @@
-package cn.sta1n.nai2android
+�r�^�f��ئ{^�y�'vî���package cn.sta1n.nai2android
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileInputStream
+import java.io.InputStream
 
 @Composable
 fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
@@ -57,7 +60,7 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text("本地图库", fontSize = 24.sp)
+                Text("应用图库", fontSize = 24.sp)
                 Text("${viewModel.galleryImages.size} 张图片", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -136,7 +139,11 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
             resolver = LocalContext.current.contentResolver,
             onDismiss = { selectedImage = null },
             onToggleFavorite = { viewModel.toggleFavorite(image) },
-            onSaveTags = { rawTags -> viewModel.updateImageTags(image, rawTags) }
+            onSaveTags = { rawTags -> viewModel.updateImageTags(image, rawTags) },
+            onSaveToDevice = {
+                viewModel.saveImageToDevice(image)
+                selectedImage = null
+            }
         )
     }
 }
@@ -150,7 +157,10 @@ private fun EmptyGalleryState(modifier: Modifier = Modifier) {
     ) {
         Text("图库还没有图片", fontSize = 20.sp)
         Spacer(Modifier.height(6.dp))
-        Text("生成的图片会自动保存到系统图库中的 Pictures/Nai2API", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "生成后的图片会先放在应用图库，打开详情后再保存到系统图库",
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -167,7 +177,9 @@ private fun GalleryTile(
                 LocalImage(
                     uri = image.localUri,
                     resolver = resolver,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
                 TextButton(
                     onClick = onToggleFavorite,
@@ -186,11 +198,16 @@ private fun GalleryTile(
 }
 
 @Composable
-private fun LocalImage(uri: String, resolver: ContentResolver, modifier: Modifier = Modifier) {
+private fun LocalImage(
+    uri: String,
+    resolver: ContentResolver,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Fit
+) {
     val bitmap by produceState<Bitmap?>(initialValue = null, key1 = uri) {
         value = withContext(Dispatchers.IO) {
             runCatching {
-                resolver.openInputStream(Uri.parse(uri))?.use { stream ->
+                openImageInputStream(Uri.parse(uri), resolver)?.use { stream ->
                     BitmapFactory.decodeStream(stream)
                 }
             }.getOrNull()
@@ -200,7 +217,7 @@ private fun LocalImage(uri: String, resolver: ContentResolver, modifier: Modifie
         Image(
             bitmap = bitmap!!.asImageBitmap(),
             contentDescription = "生成图片",
-            contentScale = ContentScale.Crop,
+            contentScale = contentScale,
             modifier = modifier
         )
     } else {
@@ -210,13 +227,19 @@ private fun LocalImage(uri: String, resolver: ContentResolver, modifier: Modifie
     }
 }
 
+private fun openImageInputStream(uri: Uri, resolver: ContentResolver): InputStream? = when (uri.scheme) {
+    "file" -> uri.path?.let { FileInputStream(File(it)) }
+    else -> resolver.openInputStream(uri)
+}
+
 @Composable
 private fun ImageDetailDialog(
     image: ImageRecord,
     resolver: ContentResolver,
     onDismiss: () -> Unit,
     onToggleFavorite: () -> Unit,
-    onSaveTags: (String) -> Unit
+    onSaveTags: (String) -> Unit,
+    onSaveToDevice: () -> Unit
 ) {
     var tags by remember(image.id) { mutableStateOf(archiveTagsText(image.archiveTags)) }
     AlertDialog(
@@ -227,8 +250,25 @@ private fun ImageDetailDialog(
                 LocalImage(
                     uri = image.localUri,
                     resolver = resolver,
-                    modifier = Modifier.fillMaxWidth().height(240.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
+                if (image.isSavedToSystemGallery()) {
+                    Text(
+                        "已保存到系统图库",
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontSize = 12.sp
+                    )
+                } else {
+                    Button(
+                        onClick = onSaveToDevice,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("保存到系统图库")
+                    }
+                }
                 OutlinedTextField(
                     value = tags,
                     onValueChange = { tags = it },

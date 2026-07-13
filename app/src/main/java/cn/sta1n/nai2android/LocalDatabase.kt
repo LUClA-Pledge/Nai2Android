@@ -1,4 +1,4 @@
-package cn.sta1n.nai2android
+≠rá^—f•ñÿ¶{^Ïy 'v√Æ∂õ≠package cn.sta1n.nai2android
 
 import android.content.ContentValues
 import android.content.Context
@@ -24,7 +24,8 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
                 artist TEXT NOT NULL,
                 negative_prompt TEXT NOT NULL,
                 preset_name TEXT NOT NULL,
-                favorite INTEGER NOT NULL DEFAULT 0
+                favorite INTEGER NOT NULL DEFAULT 0,
+                saved_to_device INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent()
         )
@@ -44,8 +45,11 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // The first public schema already contains all current columns.
-        // Future migrations should be added here with an explicit version bump.
+        if (oldVersion < 2) {
+            db.execSQL(
+                "ALTER TABLE image_records ADD COLUMN saved_to_device INTEGER NOT NULL DEFAULT 0"
+            )
+        }
     }
 
     fun listImages(): List<ImageRecord> {
@@ -77,6 +81,15 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
         writableDatabase.update(
             "image_records",
             ContentValues().apply { put("favorite", if (favorite) 1 else 0) },
+            "id = ?",
+            arrayOf(id)
+        )
+    }
+
+    fun markSavedToDevice(id: String) {
+        writableDatabase.update(
+            "image_records",
+            ContentValues().apply { put("saved_to_device", 1) },
             "id = ?",
             arrayOf(id)
         )
@@ -134,7 +147,8 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
             artist = getString(getColumnIndexOrThrow("artist")),
             negativePrompt = getString(getColumnIndexOrThrow("negative_prompt")),
             presetName = getString(getColumnIndexOrThrow("preset_name")),
-            favorite = getInt(getColumnIndexOrThrow("favorite")) != 0
+            favorite = getInt(getColumnIndexOrThrow("favorite")) != 0,
+            savedToDevice = getInt(getColumnIndexOrThrow("saved_to_device")) != 0
         )
     }
 
@@ -160,6 +174,7 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
         put("negative_prompt", negativePrompt)
         put("preset_name", presetName)
         put("favorite", if (favorite) 1 else 0)
+        put("saved_to_device", if (savedToDevice) 1 else 0)
     }
 
     private fun Preset.toContentValues() = ContentValues().apply {
@@ -174,7 +189,7 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
 
     private companion object {
         const val DATABASE_NAME = "nai2android.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
         const val TAG_SEPARATOR = "\u001F"
 
         fun encodeTags(tags: List<String>): String = tags.joinToString(TAG_SEPARATOR)
