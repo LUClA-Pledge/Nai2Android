@@ -93,20 +93,20 @@ class NaiApiClient(baseUrl: String) {
         token: String,
         onUpdate: (JobResponse) -> Unit
     ): JobResponse {
-        if (initialJob.id.isBlank()) throw NaiApiException("鏈嶅姟鏈繑鍥炴湁鏁堢殑浠诲姟缂栧彿")
+        if (initialJob.id.isBlank()) throw NaiApiException("服务未返回有效的任务编号")
         var current = initialJob
         onUpdate(current)
         repeat(MAX_POLL_ATTEMPTS) {
             when (current.status) {
                 JobStatus.DONE -> return current
-                JobStatus.FAILED -> throw NaiApiException(current.error.ifBlank { "鐢熸垚浠诲姟澶辫触" })
+                JobStatus.FAILED -> throw NaiApiException(current.error.ifBlank { "生成任务失败" })
                 else -> Unit
             }
             delay(POLL_INTERVAL_MS)
             current = getJob(current.id, token)
             onUpdate(current)
         }
-        throw NaiApiException("鐢熸垚浠诲姟绛夊緟瓒呮椂")
+        throw NaiApiException("生成任务等待超时")
     }
 
     suspend fun downloadImageTo(
@@ -120,7 +120,7 @@ class NaiApiClient(baseUrl: String) {
         try {
             val status = connection.responseCode
             if (status !in 200..299) {
-                throw NaiApiException("鍥剧墖涓嬭浇澶辫触锛圚TTP $status锛?, status)
+                throw NaiApiException("图片下载失败（HTTP $status）", status)
             }
             BufferedInputStream(connection.inputStream).use { input ->
                 BufferedOutputStream(output).use { bufferedOutput ->
@@ -153,7 +153,7 @@ class NaiApiClient(baseUrl: String) {
                 val message = runCatching { JSONObject(responseText).optString("error") }
                     .getOrNull()
                     .orEmpty()
-                    .ifBlank { responseText.ifBlank { "鎺ュ彛璇锋眰澶辫触锛圚TTP $status锛? } }
+                    .ifBlank { responseText.ifBlank { "接口请求失败（HTTP $status）" } }
                 throw NaiApiException(message, status)
             }
             return if (responseText.isBlank()) JSONObject() else JSONObject(responseText)
@@ -208,4 +208,3 @@ class NaiApiClient(baseUrl: String) {
 }
 
 const val DEFAULT_BASE_URL = "https://nai.sta1n.cn"
-

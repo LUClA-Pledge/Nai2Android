@@ -26,10 +26,10 @@ fun NaiApp(viewModel: NaiViewModel) {
         },
         bottomBar = {
             NavigationBar {
-                NavigationItem(AppScreen.CREATE, "鍒涗綔", "鉁?, viewModel)
-                NavigationItem(AppScreen.GALLERY, "鍥惧簱", "鈻?, viewModel)
-                NavigationItem(AppScreen.PRESETS, "棰勮", "鈽?, viewModel)
-                NavigationItem(AppScreen.SETTINGS, "璁剧疆", "鈿?, viewModel)
+                NavigationItem(AppScreen.CREATE, "创作", "✦", viewModel)
+                NavigationItem(AppScreen.GALLERY, "图库", "▦", viewModel)
+                NavigationItem(AppScreen.PRESETS, "预设", "☷", viewModel)
+                NavigationItem(AppScreen.SETTINGS, "设置", "⚙", viewModel)
             }
         }
     ) { paddingValues ->
@@ -59,5 +59,4 @@ private fun NavigationItem(
         label = { Text(label) }
     )
 }
-
 

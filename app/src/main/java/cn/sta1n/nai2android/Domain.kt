@@ -33,7 +33,7 @@ data class GenerationForm(
     val archiveTags: String,
     val artist: String,
     val negativePrompt: String,
-    val size: String = "绔栧浘",
+    val size: String = "竖图",
     val steps: Int = 28,
     val scale: Double = 6.0,
     val cfg: Double = 0.0,
@@ -64,7 +64,7 @@ enum class SortOrder {
 
 fun normalizeArchiveTags(raw: String): List<String> {
     return raw
-        .split(',', '\n', '锛?, ';', '锛?)
+        .split(',', '\n', '，', ';', '；')
         .map(String::trim)
         .filter(String::isNotEmpty)
         .distinctBy { it.lowercase(Locale.ROOT) }
@@ -85,8 +85,8 @@ fun sortImages(images: List<ImageRecord>, order: SortOrder): List<ImageRecord> {
 }
 
 fun generationCostForSize(size: String): Int = when (size) {
-    "2K绔栧浘", "2K妯浘", "2K鏂瑰浘" -> 15
-    "4K绔栧浘", "4K妯浘", "4K鏂瑰浘" -> 25
+    "2K竖图", "2K横图", "2K方图" -> 15
+    "4K竖图", "4K横图", "4K方图" -> 25
     else -> 1
 }
 
@@ -114,4 +114,3 @@ fun defaultArchiveTags(form: GenerationForm): List<String> {
     return listOfNotNull(form.presetName.trim().takeIf(String::isNotEmpty), presetTag)
         .distinctBy { it.lowercase(Locale.ROOT) }
 }
-

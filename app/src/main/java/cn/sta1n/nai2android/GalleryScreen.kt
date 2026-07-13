@@ -57,19 +57,19 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text("鏈湴鍥惧簱", fontSize = 24.sp)
-                Text("${viewModel.galleryImages.size} 寮犲浘鐗?, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("本地图库", fontSize = 24.sp)
+                Text("${viewModel.galleryImages.size} 张图片", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(
                     selected = viewModel.sortOrder == SortOrder.NEWEST_FIRST,
                     onClick = { viewModel.setSortOrder(SortOrder.NEWEST_FIRST) },
-                    label = { Text("鏈€鏂?) }
+                    label = { Text("最新") }
                 )
                 FilterChip(
                     selected = viewModel.sortOrder == SortOrder.OLDEST_FIRST,
                     onClick = { viewModel.setSortOrder(SortOrder.OLDEST_FIRST) },
-                    label = { Text("鏈€鏃?) }
+                    label = { Text("最早") }
                 )
             }
         }
@@ -78,13 +78,13 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
             FilterChip(
                 selected = viewModel.favoriteOnly,
                 onClick = { viewModel.setFavoriteOnly(!viewModel.favoriteOnly) },
-                label = { Text("鍙湅鏀惰棌") }
+                label = { Text("只看收藏") }
             )
             if (viewModel.selectedArchiveTag != null) {
                 FilterChip(
                     selected = true,
                     onClick = { viewModel.setArchiveTagFilter(null) },
-                    label = { Text("${viewModel.selectedArchiveTag} 脳") }
+                    label = { Text("${viewModel.selectedArchiveTag} ×") }
                 )
             }
         }
@@ -94,7 +94,7 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                     FilterChip(
                         selected = viewModel.selectedArchiveTag == null,
                         onClick = { viewModel.setArchiveTagFilter(null) },
-                        label = { Text("鍏ㄩ儴 tag") }
+                        label = { Text("全部 tag") }
                     )
                 }
                 items(viewModel.availableArchiveTags) { tag ->
@@ -148,9 +148,9 @@ private fun EmptyGalleryState(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("鍥惧簱杩樻病鏈夊浘鐗?, fontSize = 20.sp)
+        Text("图库还没有图片", fontSize = 20.sp)
         Spacer(Modifier.height(6.dp))
-        Text("鐢熸垚鐨勫浘鐗囦細鑷姩淇濆瓨鍒扮郴缁熷浘搴撲腑鐨?Pictures/Nai2API", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("生成的图片会自动保存到系统图库中的 Pictures/Nai2API", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -173,11 +173,11 @@ private fun GalleryTile(
                     onClick = onToggleFavorite,
                     modifier = Modifier.align(Alignment.TopEnd)
                 ) {
-                    Text(if (image.favorite) "鈽? else "鈽?, fontSize = 22.sp)
+                    Text(if (image.favorite) "★" else "☆", fontSize = 22.sp)
                 }
             }
             Text(
-                text = image.archiveTags.firstOrNull() ?: "鏈垎绫?,
+                text = image.archiveTags.firstOrNull() ?: "未分类",
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                 maxLines = 1
             )
@@ -199,13 +199,13 @@ private fun LocalImage(uri: String, resolver: ContentResolver, modifier: Modifie
     if (bitmap != null) {
         Image(
             bitmap = bitmap!!.asImageBitmap(),
-            contentDescription = "鐢熸垚鍥剧墖",
+            contentDescription = "生成图片",
             contentScale = ContentScale.Crop,
             modifier = modifier
         )
     } else {
         Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-            Text("璇诲彇涓€?, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("读取中…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -221,7 +221,7 @@ private fun ImageDetailDialog(
     var tags by remember(image.id) { mutableStateOf(archiveTagsText(image.archiveTags)) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (image.favorite) "宸叉敹钘忓浘鐗? else "鍥剧墖璇︽儏") },
+        title = { Text(if (image.favorite) "已收藏图片" else "图片详情") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 LocalImage(
@@ -232,24 +232,23 @@ private fun ImageDetailDialog(
                 OutlinedTextField(
                     value = tags,
                     onValueChange = { tags = it },
-                    label = { Text("褰掓。 tag") },
-                    placeholder = { Text("澶氫釜 tag 鐢ㄩ€楀彿鍒嗛殧") },
+                    label = { Text("归档 tag") },
+                    placeholder = { Text("多个 tag 用逗号分隔") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text("Prompt锛?{image.prompt}", maxLines = 5)
-                if (image.artist.isNotBlank()) Text("Artist锛?{image.artist}", maxLines = 3)
-                if (image.negativePrompt.isNotBlank()) Text("鍙嶅悜鎻愮ず璇嶏細${image.negativePrompt}", maxLines = 3)
+                Text("Prompt：${image.prompt}", maxLines = 5)
+                if (image.artist.isNotBlank()) Text("Artist：${image.artist}", maxLines = 3)
+                if (image.negativePrompt.isNotBlank()) Text("反向提示词：${image.negativePrompt}", maxLines = 3)
             }
         },
         confirmButton = {
-            Button(onClick = { onSaveTags(tags); onDismiss() }) { Text("淇濆瓨") }
+            Button(onClick = { onSaveTags(tags); onDismiss() }) { Text("保存") }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onToggleFavorite) { Text(if (image.favorite) "鍙栨秷鏀惰棌" else "鏀惰棌") }
-                TextButton(onClick = onDismiss) { Text("鍏抽棴") }
+                TextButton(onClick = onToggleFavorite) { Text(if (image.favorite) "取消收藏" else "收藏") }
+                TextButton(onClick = onDismiss) { Text("关闭") }
             }
         }
     )
 }
-

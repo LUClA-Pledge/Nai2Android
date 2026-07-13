@@ -188,4 +188,3 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
         fun newId(): String = UUID.randomUUID().toString()
     }
 }
-

@@ -83,7 +83,7 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
             negativePrompt = preset.negativePrompt,
             presetName = preset.name
         )
-        statusMessage = "宸插鐢ㄩ璁撅細${preset.name}锛屽唴瀹逛粛鍙户缁拷鍔犱慨鏀?
+        statusMessage = "已套用预设：${preset.name}，内容仍可继续追加修改"
     }
 
     fun saveConnection(newBaseUrl: String, newToken: String) {
@@ -93,7 +93,7 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         accessToken = normalizedToken
         settingsStore.baseUrl = normalizedUrl
         tokenStore.save(normalizedToken)
-        statusMessage = "杩炴帴璁剧疆宸蹭繚瀛?
+        statusMessage = "连接设置已保存"
         loadServiceSettings()
         if (normalizedToken.isNotBlank()) refreshBalance()
     }
@@ -105,8 +105,8 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             runCatching { NaiApiClient(baseUrl).getMe(accessToken) }
-                .onSuccess { balance = it.balance; statusMessage = "瀵嗛挜杩炴帴鎴愬姛锛屽綋鍓嶉搴?${it.balance} 鐐? }
-                .onFailure { balance = null; statusMessage = "瀵嗛挜杩炴帴澶辫触锛?{it.message.orEmpty()}" }
+                .onSuccess { balance = it.balance; statusMessage = "密钥连接成功，当前额度 ${it.balance} 点" }
+                .onFailure { balance = null; statusMessage = "密钥连接失败：${it.message.orEmpty()}" }
         }
     }
 
@@ -119,19 +119,19 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
                         form = form.copy(negativePrompt = settings.defaultNegative)
                     }
                 }
-                .onFailure { statusMessage = "鏈嶅姟閰嶇疆璇诲彇澶辫触锛?{it.message.orEmpty()}" }
+                .onFailure { statusMessage = "服务配置读取失败：${it.message.orEmpty()}" }
         }
     }
 
     fun generate() {
         if (isGenerating) return
         if (accessToken.isBlank()) {
-            statusMessage = "璇峰厛鍦ㄨ缃腑濉啓 STA1N 璁块棶瀵嗛挜"
+            statusMessage = "请先在设置中填写 STA1N 访问密钥"
             screen = AppScreen.SETTINGS
             return
         }
         if (form.prompt.isBlank()) {
-            statusMessage = "鎻愮ず璇嶄笉鑳戒负绌?
+            statusMessage = "提示词不能为空"
             return
         }
 
@@ -139,7 +139,7 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         val token = accessToken
         val client = NaiApiClient(baseUrl)
         isGenerating = true
-        statusMessage = "姝ｅ湪鎻愪氦鐢熸垚浠诲姟鈥︹€?
+        statusMessage = "正在提交生成任务……"
 
         viewModelScope.launch {
             try {
@@ -152,16 +152,16 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
                 val completed = client.waitForCompletion(initial, token) { job ->
                     statusMessage = when (job.status) {
                         JobStatus.QUEUED -> if (job.queuePosition > 0) {
-                            "鎺掗槦涓細绗?${job.queuePosition} / ${job.queuedCount.coerceAtLeast(1)} 涓?
+                            "排队中：第 ${job.queuePosition} / ${job.queuedCount.coerceAtLeast(1)} 个"
                         } else {
-                            "宸叉彁浜わ紝绛夊緟鍙敤璐﹀彿"
+                            "已提交，等待可用账号"
                         }
-                        JobStatus.RUNNING -> "姝ｅ湪鐢熸垚锛?{job.progress.percent}%"
-                        JobStatus.DONE -> "鍥剧墖鐢熸垚瀹屾垚锛屾鍦ㄤ繚瀛樺埌鏈湴鈥︹€?
-                        else -> "姝ｅ湪澶勭悊鈥︹€?
+                        JobStatus.RUNNING -> "正在生成：${job.progress.percent}%"
+                        JobStatus.DONE -> "图片生成完成，正在保存到本地……"
+                        else -> "正在处理……"
                     }
                 }
-                if (completed.imageUrl.isBlank()) throw NaiApiException("鏈嶅姟鏈繑鍥炲浘鐗囧湴鍧€")
+                if (completed.imageUrl.isBlank()) throw NaiApiException("服务未返回图片地址")
 
                 val fileName = "nai_${timestampForFileName()}.png"
                 val localUri = imageStorage.saveRemoteImage(client, completed.imageUrl, token, fileName)
@@ -179,9 +179,9 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) { database.insertImage(record) }
                 refreshGallery()
                 refreshBalance()
-                statusMessage = "鐢熸垚瀹屾垚锛屽凡淇濆瓨鍒扮郴缁熷浘搴?
+                statusMessage = "生成完成，已保存到系统图库"
             } catch (error: Throwable) {
-                statusMessage = "鐢熸垚澶辫触锛?{error.message ?: "鏈煡閿欒"}"
+                statusMessage = "生成失败：${error.message ?: "未知错误"}"
             } finally {
                 isGenerating = false
             }
@@ -232,13 +232,13 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
 
     fun savePreset(preset: Preset) {
         if (preset.name.isBlank()) {
-            statusMessage = "棰勮鍚嶇О涓嶈兘涓虹┖"
+            statusMessage = "预设名称不能为空"
             return
         }
         viewModelScope.launch {
             withContext(Dispatchers.IO) { database.upsertPreset(preset.copy(name = preset.name.trim())) }
             refreshPresets()
-            statusMessage = "棰勮宸蹭繚瀛?
+            statusMessage = "预设已保存"
         }
     }
 
@@ -246,7 +246,7 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) { database.deletePreset(preset.id) }
             refreshPresets()
-            statusMessage = "棰勮宸插垹闄?
+            statusMessage = "预设已删除"
         }
     }
 
@@ -295,4 +295,3 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
     }
 }
-

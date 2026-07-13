@@ -23,12 +23,12 @@ class ImageStorage(private val context: Context) {
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
         val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-            ?: error("鏃犳硶鍒涘缓绯荤粺鍥惧簱鏂囦欢")
+            ?: error("无法创建系统图库文件")
 
         try {
             resolver.openOutputStream(uri)?.use { output ->
                 client.downloadImageTo(imageUrl, token, output)
-            } ?: error("鏃犳硶鎵撳紑鍥惧簱鏂囦欢")
+            } ?: error("无法打开图库文件")
             resolver.update(
                 uri,
                 ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) },
@@ -42,4 +42,3 @@ class ImageStorage(private val context: Context) {
         }
     }
 }
-

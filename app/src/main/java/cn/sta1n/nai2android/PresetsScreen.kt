@@ -34,10 +34,10 @@ fun PresetsScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text("鎴戠殑棰勮", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text("tag銆乤rtist銆佸弽鍚戞彁绀鸿瘝閮藉彲浠ョ户缁拷鍔?, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("我的预设", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("tag、artist、反向提示词都可以继续追加", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Button(onClick = { editingPreset = viewModel.newPreset() }) { Text("鏂板") }
+            Button(onClick = { editingPreset = viewModel.newPreset() }) { Text("新增") }
         }
 
         if (viewModel.presets.isEmpty()) {
@@ -45,8 +45,8 @@ fun PresetsScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.Center
             ) {
-                Text("杩樻病鏈夎嚜瀹氫箟棰勮")
-                Text("鏂板涓€涓璁惧悗锛屽畠浼氬嚭鐜板湪鍒涗綔椤电殑蹇€熷鐢ㄥ尯鍩熴€?)
+                Text("还没有自定义预设")
+                Text("新增一个预设后，它会出现在创作页的快速套用区域。")
             }
         } else {
             LazyColumn(
@@ -62,13 +62,13 @@ fun PresetsScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                             ) {
                                 Text(preset.name, fontWeight = FontWeight.Bold)
                                 Row {
-                                    TextButton(onClick = { editingPreset = preset }) { Text("缂栬緫") }
-                                    TextButton(onClick = { viewModel.deletePreset(preset) }) { Text("鍒犻櫎") }
+                                    TextButton(onClick = { editingPreset = preset }) { Text("编辑") }
+                                    TextButton(onClick = { viewModel.deletePreset(preset) }) { Text("删除") }
                                 }
                             }
-                            Text("tag锛?{preset.tag.ifBlank { "鏈～鍐? }}", maxLines = 3)
-                            Text("artist锛?{preset.artist.ifBlank { "鏈～鍐? }}", maxLines = 2)
-                            Text("鍙嶅悜鎻愮ず璇嶏細${preset.negativePrompt.ifBlank { "鏈～鍐? }}", maxLines = 2)
+                            Text("tag：${preset.tag.ifBlank { "未填写" }}", maxLines = 3)
+                            Text("artist：${preset.artist.ifBlank { "未填写" }}", maxLines = 2)
+                            Text("反向提示词：${preset.negativePrompt.ifBlank { "未填写" }}", maxLines = 2)
                         }
                     }
                 }
@@ -101,38 +101,38 @@ private fun PresetEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (preset.name.isBlank()) "鏂板棰勮" else "缂栬緫棰勮") },
+        title = { Text(if (preset.name.isBlank()) "新增预设" else "编辑预设") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("棰勮鍚嶇О") },
+                    label = { Text("预设名称") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = tag,
                     onValueChange = { tag = it },
-                    label = { Text("tag / 鎻愮ず璇?) },
+                    label = { Text("tag / 提示词") },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = artist,
                     onValueChange = { artist = it },
-                    label = { Text("artist / 璐ㄩ噺鍓嶇紑") },
+                    label = { Text("artist / 质量前缀") },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = negative,
                     onValueChange = { negative = it },
-                    label = { Text("鍙嶅悜鎻愮ず璇?) },
+                    label = { Text("反向提示词") },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text("缂栬緫鏃剁洿鎺ュ湪鍘熷唴瀹瑰悗缁х画杈撳叆鍗冲彲杩藉姞锛涘簲鐢ㄤ笉浼氳嚜鍔ㄦ浛鎹綘鐨勬枃鏈€?)
+                Text("编辑时直接在原内容后继续输入即可追加；应用不会自动替换你的文本。")
             }
         },
         confirmButton = {
@@ -144,10 +144,9 @@ private fun PresetEditorDialog(
                     negativePrompt = negative,
                     updatedAt = System.currentTimeMillis()
                 ))
-            }) { Text("淇濆瓨") }
+            }) { Text("保存") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("鍙栨秷") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }
-
 
