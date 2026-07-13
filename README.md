@@ -35,3 +35,7 @@ gradle :app:assembleDebug
 4. 在“图库”中按时间、收藏和 tag 查找；打开图片详情可以修改归档 tag。
 
 应用没有实现站点的“密钥融合”操作，避免误合并额度造成不可逆影响。
+
+## 构建验证
+
+此草稿 PR 用于触发并验证 GitHub Actions 的 Android 编译流程。
