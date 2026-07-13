@@ -27,13 +27,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -42,6 +45,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,6 +70,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
     var selectedImage by remember { mutableStateOf<ImageRecord?>(null) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
     val resolver = LocalContext.current.contentResolver
 
     LazyVerticalGrid(
@@ -140,6 +145,45 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                         label = { Text("只看收藏") }
                     )
                 }
+                item {
+                    FilterChip(
+                        selected = viewModel.gallerySelectionMode,
+                        onClick = {
+                            if (viewModel.gallerySelectionMode) {
+                                viewModel.exitGallerySelectionMode()
+                            } else {
+                                viewModel.enterGallerySelectionMode()
+                            }
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Filled.SelectAll, contentDescription = null)
+                        },
+                        label = { Text("选择图片") }
+                    )
+                }
+            }
+        }
+
+        if (viewModel.gallerySelectionMode) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                GallerySelectionBar(
+                    selectedCount = viewModel.gallerySelection.ids.size,
+                    allVisibleSelected = viewModel.galleryImages.isNotEmpty() &&
+                        viewModel.galleryImages.all { it.id in viewModel.gallerySelection.ids },
+                    actionRunning = viewModel.isGalleryActionRunning,
+                    onToggleSelectAll = {
+                        if (viewModel.galleryImages.isNotEmpty() &&
+                            viewModel.galleryImages.all { it.id in viewModel.gallerySelection.ids }
+                        ) {
+                            viewModel.clearGallerySelection()
+                        } else {
+                            viewModel.selectAllVisibleGalleryImages()
+                        }
+                    },
+                    onExport = viewModel::exportSelectedGalleryImages,
+                    onDelete = { showDeleteConfirmation = true },
+                    onExit = viewModel::exitGallerySelectionMode
+                )
             }
         }
 
@@ -188,7 +232,10 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 GalleryTile(
                     image = image,
                     resolver = resolver,
+                    selectionMode = viewModel.gallerySelectionMode,
+                    selected = image.id in viewModel.gallerySelection.ids,
                     onClick = { selectedImage = image },
+                    onToggleSelection = { viewModel.toggleGallerySelection(image) },
                     onToggleFavorite = { viewModel.toggleFavorite(image) }
                 )
             }
@@ -208,6 +255,85 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 selectedImage = null
             }
         )
+    }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("删除所选图片？") },
+            text = {
+                Text(
+                    "将从应用图库删除 ${viewModel.gallerySelection.ids.size} 张图片。已经导出到系统相册的副本不会被删除。"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        viewModel.deleteSelectedGalleryImages()
+                    },
+                    enabled = !viewModel.isGalleryActionRunning
+                ) {
+                    Text("确认删除")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) { Text("取消") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun GallerySelectionBar(
+    selectedCount: Int,
+    allVisibleSelected: Boolean,
+    actionRunning: Boolean,
+    onToggleSelectAll: () -> Unit,
+    onExport: () -> Unit,
+    onDelete: () -> Unit,
+    onExit: () -> Unit
+) {
+    StudioCard(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    if (selectedCount == 0) "选择图片" else "已选择 $selectedCount 张",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "点按图片即可加入或移出批量操作",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontSize = 12.sp
+                )
+            }
+            TextButton(onClick = onExit, enabled = !actionRunning) { Text("退出") }
+        }
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(onClick = onToggleSelectAll, enabled = !actionRunning) {
+                Icon(Icons.Filled.SelectAll, contentDescription = null)
+                Spacer(Modifier.size(6.dp))
+                Text(if (allVisibleSelected) "取消全选" else "全选当前")
+            }
+            Button(onClick = onExport, enabled = selectedCount > 0 && !actionRunning) {
+                Icon(Icons.Filled.Download, contentDescription = null)
+                Spacer(Modifier.size(6.dp))
+                Text("批量导出")
+            }
+            OutlinedButton(onClick = onDelete, enabled = selectedCount > 0 && !actionRunning) {
+                Icon(Icons.Filled.Delete, contentDescription = null)
+                Spacer(Modifier.size(6.dp))
+                Text("批量删除")
+            }
+        }
     }
 }
 
@@ -246,13 +372,16 @@ private fun EmptyGalleryState() {
 private fun GalleryTile(
     image: ImageRecord,
     resolver: ContentResolver,
+    selectionMode: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
+    onToggleSelection: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(onClick = if (selectionMode) onToggleSelection else onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -268,6 +397,31 @@ private fun GalleryTile(
                     resolver = resolver,
                     modifier = Modifier.fillMaxSize()
                 )
+                if (selectionMode) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp),
+                        shape = CircleShape,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.82f)
+                        }
+                    ) {
+                        IconButton(onClick = onToggleSelection) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = if (selected) "取消选择" else "选择",
+                                tint = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                        }
+                    }
+                }
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)

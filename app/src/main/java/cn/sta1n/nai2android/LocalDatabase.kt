@@ -95,6 +95,30 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
         )
     }
 
+    fun markSavedToDevice(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        writableDatabase.beginTransaction()
+        try {
+            ids.forEach(::markSavedToDevice)
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
+    }
+
+    fun deleteImages(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        writableDatabase.beginTransaction()
+        try {
+            ids.forEach { id ->
+                writableDatabase.delete("image_records", "id = ?", arrayOf(id))
+            }
+            writableDatabase.setTransactionSuccessful()
+        } finally {
+            writableDatabase.endTransaction()
+        }
+    }
+
     fun updateArchiveTags(id: String, tags: List<String>) {
         writableDatabase.update(
             "image_records",

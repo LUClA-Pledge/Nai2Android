@@ -56,6 +56,12 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var selectedArchiveTag by mutableStateOf<String?>(null)
         private set
+    var gallerySelectionMode by mutableStateOf(false)
+        private set
+    var gallerySelection by mutableStateOf(GallerySelection())
+        private set
+    var isGalleryActionRunning by mutableStateOf(false)
+        private set
 
     private var allGalleryImages: List<ImageRecord> = emptyList()
 
@@ -217,6 +223,99 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         applyGalleryFilters()
     }
 
+    fun enterGallerySelectionMode() {
+        gallerySelectionMode = true
+    }
+
+    fun exitGallerySelectionMode() {
+        gallerySelectionMode = false
+        gallerySelection = GallerySelection()
+    }
+
+    fun toggleGallerySelection(image: ImageRecord) {
+        gallerySelection = gallerySelection.toggle(image.id)
+    }
+
+    fun selectAllVisibleGalleryImages() {
+        gallerySelection = gallerySelection.selectAll(galleryImages)
+    }
+
+    fun clearGallerySelection() {
+        gallerySelection = GallerySelection()
+    }
+
+    fun exportSelectedGalleryImages() {
+        val selected = selectedGalleryImages()
+        if (selected.isEmpty() || isGalleryActionRunning) {
+            if (selected.isEmpty()) statusMessage = "请先选择要导出的图片"
+            return
+        }
+        isGalleryActionRunning = true
+        statusMessage = "正在批量导出图片……"
+        viewModelScope.launch {
+            try {
+                var exportedCount = 0
+                var failedCount = 0
+                val pending = selected.filterNot(ImageRecord::isSavedToSystemGallery)
+                val exportedIds = mutableSetOf<String>()
+                pending.forEach { image ->
+                    runCatching {
+                        imageStorage.exportToSystemGallery(
+                            source = Uri.parse(image.localUri),
+                            displayName = "nai_${image.id}.png"
+                        )
+                    }.onSuccess {
+                        exportedIds += image.id
+                        exportedCount++
+                    }.onFailure {
+                        failedCount++
+                    }
+                }
+                withContext(Dispatchers.IO) { database.markSavedToDevice(exportedIds) }
+                loadGallery()
+                gallerySelection = GallerySelection()
+                gallerySelectionMode = false
+                val alreadySavedCount = selected.size - pending.size
+                statusMessage = when {
+                    failedCount > 0 -> "已导出 $exportedCount 张，$failedCount 张失败"
+                    exportedCount == 0 && alreadySavedCount > 0 -> "所选图片已经全部导出过了"
+                    else -> "已批量导出 $exportedCount 张图片到系统相册"
+                }
+            } catch (error: Throwable) {
+                statusMessage = "批量导出失败：${error.message.orEmpty()}"
+            } finally {
+                isGalleryActionRunning = false
+            }
+        }
+    }
+
+    fun deleteSelectedGalleryImages() {
+        val selected = selectedGalleryImages()
+        if (selected.isEmpty() || isGalleryActionRunning) {
+            if (selected.isEmpty()) statusMessage = "请先选择要删除的图片"
+            return
+        }
+        isGalleryActionRunning = true
+        statusMessage = "正在删除所选图片……"
+        viewModelScope.launch {
+            try {
+                val selectedIds = selected.mapTo(mutableSetOf()) { it.id }
+                withContext(Dispatchers.IO) {
+                    selected.forEach { imageStorage.deleteFromAppGallery(Uri.parse(it.localUri)) }
+                    database.deleteImages(selectedIds)
+                }
+                gallerySelection = GallerySelection()
+                gallerySelectionMode = false
+                loadGallery()
+                statusMessage = "已从应用图库删除 ${selected.size} 张图片；系统相册中的导出副本不会被删除"
+            } catch (error: Throwable) {
+                statusMessage = "批量删除失败：${error.message.orEmpty()}"
+            } finally {
+                isGalleryActionRunning = false
+            }
+        }
+    }
+
     fun toggleFavorite(image: ImageRecord) {
         val next = !image.favorite
         viewModelScope.launch {
@@ -302,6 +401,8 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun loadGallery() {
         allGalleryImages = withContext(Dispatchers.IO) { database.listImages() }
+        val availableIds = allGalleryImages.mapTo(mutableSetOf()) { it.id }
+        gallerySelection = GallerySelection(gallerySelection.ids.intersect(availableIds))
         availableArchiveTags = allGalleryImages
             .flatMap { it.archiveTags }
             .distinctBy { it.lowercase(Locale.ROOT) }
@@ -317,6 +418,10 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
             },
             sortOrder
         )
+    }
+
+    private fun selectedGalleryImages(): List<ImageRecord> = allGalleryImages.filter {
+        it.id in gallerySelection.ids
     }
 
     private fun timestampForFileName(): String =

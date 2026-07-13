@@ -65,6 +65,20 @@ enum class SortOrder {
     OLDEST_FIRST
 }
 
+data class GallerySelection(val ids: Set<String> = emptySet()) {
+    fun toggle(id: String): GallerySelection = copy(
+        ids = if (id in ids) ids - id else ids + id
+    )
+
+    fun selectAll(images: List<ImageRecord>): GallerySelection = copy(
+        ids = images.mapTo(linkedSetOf()) { it.id }
+    )
+
+    fun remove(idsToRemove: Set<String>): GallerySelection = copy(
+        ids = ids - idsToRemove
+    )
+}
+
 fun normalizeArchiveTags(raw: String): List<String> {
     return raw
         .split(',', '\n', '，', ';', '；')
