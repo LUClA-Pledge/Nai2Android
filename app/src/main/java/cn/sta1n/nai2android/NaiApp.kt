@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -52,11 +52,7 @@ private fun NavigationItem(
     glyph: String,
     viewModel: NaiViewModel
 ) {
-    NavigationBarItem(
-        selected = viewModel.screen == screen,
-        onClick = { viewModel.selectScreen(screen) },
-        icon = { Text(glyph) },
-        label = { Text(label) }
-    )
+    TextButton(onClick = { viewModel.selectScreen(screen) }) {
+        Text(if (viewModel.screen == screen) "$glyph $label" else label)
+    }
 }
-

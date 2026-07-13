@@ -29,10 +29,10 @@ data class Preset(
 )
 
 data class GenerationForm(
-    val prompt: String,
-    val archiveTags: String,
-    val artist: String,
-    val negativePrompt: String,
+    val prompt: String = "",
+    val archiveTags: String = "",
+    val artist: String = "",
+    val negativePrompt: String = "",
     val size: String = "竖图",
     val steps: Int = 28,
     val scale: Double = 6.0,
