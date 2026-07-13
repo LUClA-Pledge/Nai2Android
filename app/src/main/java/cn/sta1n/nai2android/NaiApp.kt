@@ -137,7 +137,7 @@ private fun NavigationItem(
                 },
                 fontSize = 11.sp
             )
-        )
+        }
     }
 }
 
