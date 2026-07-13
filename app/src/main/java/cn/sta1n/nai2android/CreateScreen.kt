@@ -3,15 +3,15 @@ package cn.sta1n.nai2android
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
@@ -40,23 +40,22 @@ import androidx.compose.foundation.layout.width
 @Composable
 fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
     val form = viewModel.form
-    val scrollState = rememberScrollState()
-
-    Column(
-        modifier = modifier
-            .verticalScroll(scrollState)
-            .imePadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+    LazyColumn(
+        modifier = modifier.imePadding(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        ScreenHeader(
+        item {
+            ScreenHeader(
             kicker = "CREATE / NAI2 API",
             title = "创作一张图",
             subtitle = "把想法交给模型，细节可以在生成前继续调整。"
-        )
+            )
+        }
 
         if (viewModel.presets.isNotEmpty()) {
-            StudioCard {
+            item {
+                StudioCard {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -88,10 +87,12 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                         )
                     }
                 }
+                }
             }
         }
 
-        StudioCard {
+        item {
+            StudioCard {
             StudioSectionHeader("01", "画面描述", "先写清楚你想看到什么")
             MultilineField(
                 label = "提示词 / NAI tag",
@@ -109,9 +110,11 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 minLines = 2
             )
             FieldHint("只用于 App 内分类和筛选，不会改变生图提示词。")
+            }
         }
 
-        StudioCard {
+        item {
+            StudioCard {
             StudioSectionHeader("02", "风格控制", "选择一个起点，也可以继续手改")
             MultilineField(
                 label = "Artist / 质量前缀",
@@ -151,9 +154,11 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 placeholder = "bad hands, blurry, watermark ...",
                 minLines = 4
             )
+            }
         }
 
-        StudioCard {
+        item {
+            StudioCard {
             StudioSectionHeader("03", "生成参数", "画幅越大，消耗的额度越高")
             DropdownField(
                 label = "画幅 / 分辨率",
@@ -194,10 +199,12 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 ),
                 onValueChange = { value -> viewModel.updateForm { it.copy(sampler = value) } }
             )
+            }
         }
 
         if (viewModel.statusMessage.isNotBlank()) {
-            StudioCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+            item {
+                StudioCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(
                         Icons.Filled.AutoAwesome,
@@ -210,10 +217,12 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                         fontWeight = FontWeight.Medium
                     )
                 }
+                }
             }
         }
 
-        Button(
+        item {
+            Button(
             onClick = viewModel::generate,
             enabled = !viewModel.isGenerating,
             modifier = Modifier
@@ -224,15 +233,16 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             )
-        ) {
+            ) {
             Icon(Icons.Filled.AutoAwesome, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(
                 if (viewModel.isGenerating) "正在生成……" else "生成图片 · ${generationCostForSize(form.size)} 点",
                 fontWeight = FontWeight.Bold
             )
+            }
         }
-        Spacer(Modifier.height(8.dp))
+        item { Spacer(Modifier.height(8.dp)) }
     }
 }
 

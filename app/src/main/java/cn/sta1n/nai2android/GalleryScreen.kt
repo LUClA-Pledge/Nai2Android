@@ -2,7 +2,6 @@ package cn.sta1n.nai2android
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -35,7 +34,6 @@ import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -63,11 +61,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileInputStream
-import java.io.InputStream
 
 @Composable
 fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
@@ -336,13 +330,22 @@ private fun LocalImage(
     modifier: Modifier = Modifier,
     preserveAspectRatio: Boolean = false
 ) {
-    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = uri) {
-        value = withContext(Dispatchers.IO) {
+    val thumbnail = !preserveAspectRatio
+    val cacheKey = if (thumbnail) "thumbnail:$uri" else "full:$uri"
+    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = cacheKey) {
+        val cached = if (thumbnail) GalleryThumbnailCache.get(uri) else null
+        value = cached ?: withContext(galleryImageDecodeDispatcher) {
             runCatching {
-                openImageInputStream(Uri.parse(uri), resolver)?.use { stream ->
-                    BitmapFactory.decodeStream(stream)
-                }
+                decodeGalleryBitmap(
+                    uri = Uri.parse(uri),
+                    resolver = resolver,
+                    maxDimension = GALLERY_THUMBNAIL_MAX_DIMENSION.takeIf { thumbnail }
+                )
             }.getOrNull()
+        }.also { decoded ->
+            if (thumbnail && decoded != null) {
+                GalleryThumbnailCache.put(uri, decoded)
+            }
         }
     }
     if (bitmap != null) {
@@ -375,11 +378,6 @@ private fun LocalImage(
             Text("读取中…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-}
-
-private fun openImageInputStream(uri: Uri, resolver: ContentResolver): InputStream? = when (uri.scheme) {
-    "file" -> uri.path?.let { FileInputStream(File(it)) }
-    else -> resolver.openInputStream(uri)
 }
 
 @Composable
