@@ -1,7 +1,13 @@
 package cn.sta1n.nai2android
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Collections
@@ -10,8 +16,6 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -19,8 +23,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,10 +74,10 @@ fun NaiApp(viewModel: NaiViewModel) {
                 containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp
             ) {
-                NavigationItem(AppScreen.CREATE, "创作", Icons.Filled.AutoAwesome, viewModel)
-                NavigationItem(AppScreen.GALLERY, "图库", Icons.Filled.Collections, viewModel)
-                NavigationItem(AppScreen.PRESETS, "预设", Icons.Filled.Tune, viewModel)
-                NavigationItem(AppScreen.SETTINGS, "设置", Icons.Filled.Settings, viewModel)
+                NavigationItem(AppScreen.CREATE, "创作", Icons.Filled.AutoAwesome, viewModel, Modifier.weight(1f))
+                NavigationItem(AppScreen.GALLERY, "图库", Icons.Filled.Collections, viewModel, Modifier.weight(1f))
+                NavigationItem(AppScreen.PRESETS, "预设", Icons.Filled.Tune, viewModel, Modifier.weight(1f))
+                NavigationItem(AppScreen.SETTINGS, "设置", Icons.Filled.Settings, viewModel, Modifier.weight(1f))
             }
         }
     ) { paddingValues ->
@@ -92,21 +98,47 @@ private fun NavigationItem(
     screen: AppScreen,
     label: String,
     icon: ImageVector,
-    viewModel: NaiViewModel
+    viewModel: NaiViewModel,
+    modifier: Modifier
 ) {
-    NavigationBarItem(
-        selected = viewModel.screen == screen,
-        onClick = { viewModel.selectScreen(screen) },
-        icon = { Icon(icon, contentDescription = label) },
-        label = { Text(label) },
-        colors = NavigationBarItemDefaults.colors(
-            selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
-            selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-            indicatorColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer,
-            unselectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-            unselectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+    val selected = viewModel.screen == screen
+    Surface(
+        modifier = modifier
+            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .height(58.dp)
+            .clickable { viewModel.selectScreen(screen) },
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) {
+            androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer
+        } else {
+            androidx.compose.ui.graphics.Color.Transparent
+        }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = if (selected) {
+                    androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+            Text(
+                label,
+                color = if (selected) {
+                    androidx.compose.material3.MaterialTheme.colorScheme.primary
+                } else {
+                    androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontSize = 11.sp
+            )
         )
-    )
+    }
 }
 
 private fun screenTitle(screen: AppScreen): String = when (screen) {
