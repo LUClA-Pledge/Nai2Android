@@ -6,7 +6,7 @@ data class ArtistPreset(
     val value: String
 )
 
-/** The five artist presets exposed by the website's create page. */
+/** The six artist presets exposed by the website's create page. */
 val WEBSITE_ARTIST_PRESETS = listOf(
     ArtistPreset(
         id = "fresh",

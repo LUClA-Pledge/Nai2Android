@@ -65,7 +65,7 @@ class DomainRulesTest {
 
     @Test
     fun website_artist_presets_match_the_create_page_defaults() {
-        assertEquals(5, WEBSITE_ARTIST_PRESETS.size)
+        assertEquals(6, WEBSITE_ARTIST_PRESETS.size)
         assertEquals("韩漫小清新风", WEBSITE_ARTIST_PRESETS.first().label)
         assertEquals("2.5d", DEFAULT_WEBSITE_ARTIST_PRESET.id)
         assertTrue(DEFAULT_WEBSITE_ARTIST_PRESET.value.isNotBlank())
