@@ -56,6 +56,16 @@ class ImageStorage(private val context: Context) {
         }
     }
 
+    suspend fun deleteFromAppGallery(source: Uri): Boolean = withContext(Dispatchers.IO) {
+        if (source.scheme != "file") return@withContext false
+        runCatching {
+            val galleryDirectory = File(context.filesDir, APP_GALLERY_DIRECTORY).canonicalFile
+            val target = File(source.path ?: return@runCatching false).canonicalFile
+            val galleryPath = galleryDirectory.path + File.separator
+            target.path.startsWith(galleryPath) && (!target.exists() || target.delete())
+        }.getOrDefault(false)
+    }
+
     private fun openInputStream(uri: Uri): InputStream? = when (uri.scheme) {
         "file" -> uri.path?.let { FileInputStream(File(it)) }
         else -> context.contentResolver.openInputStream(uri)
