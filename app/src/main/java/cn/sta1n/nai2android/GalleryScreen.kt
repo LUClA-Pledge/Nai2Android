@@ -63,12 +63,12 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(
                     selected = viewModel.sortOrder == SortOrder.NEWEST_FIRST,
-                    onClick = { viewModel.setSortOrder(SortOrder.NEWEST_FIRST) },
+                    onClick = { viewModel.updateSortOrder(SortOrder.NEWEST_FIRST) },
                     label = { Text("最新") }
                 )
                 FilterChip(
                     selected = viewModel.sortOrder == SortOrder.OLDEST_FIRST,
-                    onClick = { viewModel.setSortOrder(SortOrder.OLDEST_FIRST) },
+                    onClick = { viewModel.updateSortOrder(SortOrder.OLDEST_FIRST) },
                     label = { Text("最早") }
                 )
             }
@@ -77,7 +77,7 @@ fun GalleryScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = viewModel.favoriteOnly,
-                onClick = { viewModel.setFavoriteOnly(!viewModel.favoriteOnly) },
+                onClick = { viewModel.updateFavoriteOnly(!viewModel.favoriteOnly) },
                 label = { Text("只看收藏") }
             )
             if (viewModel.selectedArchiveTag != null) {

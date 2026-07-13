@@ -192,12 +192,12 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { loadGallery() }
     }
 
-    fun setSortOrder(value: SortOrder) {
+    fun updateSortOrder(value: SortOrder) {
         sortOrder = value
         applyGalleryFilters()
     }
 
-    fun setFavoriteOnly(value: Boolean) {
+    fun updateFavoriteOnly(value: Boolean) {
         favoriteOnly = value
         applyGalleryFilters()
     }
