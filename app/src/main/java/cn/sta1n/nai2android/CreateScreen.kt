@@ -22,6 +22,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,6 +42,7 @@ import androidx.compose.foundation.layout.width
 @Composable
 fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
     val form = viewModel.form
+    val resolver = LocalContext.current.contentResolver
     LazyColumn(
         modifier = modifier.imePadding(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -199,24 +202,45 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 ),
                 onValueChange = { value -> viewModel.updateForm { it.copy(sampler = value) } }
             )
+            NumberField(
+                label = "并发张数（1–4）",
+                value = form.batchCount.toString(),
+                onValueChange = { value ->
+                    viewModel.updateForm {
+                        it.copy(batchCount = normalizedBatchCount(value.toIntOrNull() ?: it.batchCount))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
             }
         }
 
-        if (viewModel.statusMessage.isNotBlank()) {
+        if (viewModel.generationTasks.isNotEmpty()) {
             item {
-                StudioCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(
-                        Icons.Filled.AutoAwesome,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary
+                StudioCard {
+                    StudioSectionHeader("04", "生成任务", "每张图独立排队与保存，互不挤占提示")
+                    viewModel.generationTasks.forEach { task ->
+                        GenerationTaskRow(task)
+                    }
+                }
+            }
+        }
+
+        viewModel.latestGeneratedImage?.let { image ->
+            item {
+                StudioCard {
+                    StudioSectionHeader("05", "本次最新结果", "图片仍保存在应用图库，导出由你决定")
+                    LocalImage(
+                        uri = image.localUri,
+                        resolver = resolver,
+                        modifier = Modifier.fillMaxWidth(),
+                        preserveAspectRatio = true
                     )
                     Text(
-                        viewModel.statusMessage,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontWeight = FontWeight.Medium
+                        image.archiveTags.joinToString().ifBlank { "未分类" },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
                     )
-                }
                 }
             }
         }
@@ -237,12 +261,36 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
             Icon(Icons.Filled.AutoAwesome, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(
-                if (viewModel.isGenerating) "正在生成……" else "生成图片 · ${generationCostForSize(form.size)} 点",
+                if (viewModel.isGenerating) {
+                    "正在并发生成 ${normalizedBatchCount(form.batchCount)} 张……"
+                } else {
+                    "生成 ${normalizedBatchCount(form.batchCount)} 张 · ${generationCostForSize(form.size) * normalizedBatchCount(form.batchCount)} 点"
+                },
                 fontWeight = FontWeight.Bold
             )
             }
         }
         item { Spacer(Modifier.height(8.dp)) }
+    }
+}
+
+@Composable
+private fun GenerationTaskRow(task: GenerationTaskUiState) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text("图片 ${task.sequence}", fontWeight = FontWeight.SemiBold)
+        Text(
+            task.message,
+            color = if (task.status == GenerationTaskStatus.FAILED) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            fontSize = 12.sp
+        )
+        LinearProgressIndicator(
+            progress = { task.progress / 100f },
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
@@ -329,3 +377,4 @@ private fun DropdownField(
         }
     }
 }
+

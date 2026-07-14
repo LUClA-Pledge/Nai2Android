@@ -12,14 +12,35 @@ data class ImageRecord(
     val negativePrompt: String,
     val presetName: String,
     val favorite: Boolean,
-    val savedToDevice: Boolean = false
+    val savedToDevice: Boolean = false,
+    val exportCount: Int = 0,
+    val parameters: GenerationParameters = GenerationParameters()
 ) {
     fun matchesArchiveTag(tag: String): Boolean = archiveTags.any {
         it.trim().equals(tag.trim(), ignoreCase = true)
     }
 
-    fun isSavedToSystemGallery(): Boolean = savedToDevice || localUri.startsWith("content://")
+    fun isSavedToSystemGallery(): Boolean =
+        exportCount > 0 || savedToDevice || localUri.startsWith("content://")
+
+    fun recordExport(): ImageRecord = copy(
+        savedToDevice = true,
+        exportCount = exportCount + 1
+    )
 }
+
+data class GenerationParameters(
+    val jobId: String = "",
+    val model: String = "",
+    val size: String = "",
+    val cost: Int = 0,
+    val steps: Int = 0,
+    val scale: Double = 0.0,
+    val cfg: Double = 0.0,
+    val sampler: String = "",
+    val noiseSchedule: String = "",
+    val noCache: Boolean = true
+)
 
 data class Preset(
     val id: String,
@@ -41,7 +62,8 @@ data class GenerationForm(
     val scale: Double = 6.0,
     val cfg: Double = 0.0,
     val sampler: String = "k_dpmpp_2m_sde",
-    val presetName: String = ""
+    val presetName: String = "",
+    val batchCount: Int = 1
 )
 
 data class JobPayload(
@@ -124,6 +146,28 @@ fun GenerationForm.toJobPayload(
     negative = negativePrompt.trim()
 )
 
+fun GenerationForm.toGenerationParameters(model: String): GenerationParameters = GenerationParameters(
+    model = model,
+    size = size,
+    cost = generationCostForSize(size),
+    steps = steps.coerceIn(1, 28),
+    scale = scale.coerceIn(1.0, 20.0),
+    cfg = cfg.coerceIn(0.0, 1.0),
+    sampler = sampler,
+    noiseSchedule = "karras",
+    noCache = true
+)
+
+fun GenerationForm.withPreset(preset: Preset): GenerationForm = copy(
+    prompt = preset.tag,
+    archiveTags = preset.name,
+    artist = preset.artist,
+    negativePrompt = preset.negativePrompt,
+    presetName = preset.name
+)
+
+fun normalizedBatchCount(value: Int): Int = value.coerceIn(1, 4)
+
 fun defaultArchiveTags(form: GenerationForm): List<String> {
     val explicit = normalizeArchiveTags(form.archiveTags)
     if (explicit.isNotEmpty()) return explicit
@@ -131,3 +175,4 @@ fun defaultArchiveTags(form: GenerationForm): List<String> {
     return listOfNotNull(form.presetName.trim().takeIf(String::isNotEmpty), presetTag)
         .distinctBy { it.lowercase(Locale.ROOT) }
 }
+
