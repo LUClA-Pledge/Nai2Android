@@ -8,6 +8,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -21,6 +23,24 @@ enum class AppScreen {
     PRESETS,
     SETTINGS
 }
+
+enum class GenerationTaskStatus {
+    SUBMITTING,
+    QUEUED,
+    RUNNING,
+    SAVING,
+    DONE,
+    FAILED
+}
+
+data class GenerationTaskUiState(
+    val id: String,
+    val sequence: Int,
+    val status: GenerationTaskStatus = GenerationTaskStatus.SUBMITTING,
+    val progress: Int = 0,
+    val message: String = "正在提交任务",
+    val imageId: String? = null
+)
 
 class NaiViewModel(application: Application) : AndroidViewModel(application) {
     private val database = LocalDatabase(application)
@@ -41,6 +61,10 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
     var form by mutableStateOf(GenerationForm())
         private set
     var isGenerating by mutableStateOf(false)
+        private set
+    var generationTasks by mutableStateOf<List<GenerationTaskUiState>>(emptyList())
+        private set
+    var latestGeneratedImage by mutableStateOf<ImageRecord?>(null)
         private set
     var statusMessage by mutableStateOf("")
         private set
@@ -83,13 +107,12 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         form = transform(form)
     }
 
+    fun clearStatusMessage() {
+        statusMessage = ""
+    }
+
     fun applyPreset(preset: Preset) {
-        form = form.copy(
-            prompt = preset.tag,
-            artist = preset.artist,
-            negativePrompt = preset.negativePrompt,
-            presetName = preset.name
-        )
+        form = form.withPreset(preset)
         statusMessage = "已套用预设：${preset.name}，内容仍可继续追加修改"
     }
 
@@ -150,57 +173,117 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val requestForm = form
+        val requestForm = form.copy(batchCount = normalizedBatchCount(form.batchCount))
         val token = accessToken
         val client = NaiApiClient(baseUrl)
+        val model = serviceSettings?.defaultModel ?: "nai-diffusion-4-5-full"
+        val taskIds = (1..requestForm.batchCount).map { UUID.randomUUID().toString() }
         isGenerating = true
-        statusMessage = "正在提交生成任务……"
+        generationTasks = taskIds.mapIndexed { index, id ->
+            GenerationTaskUiState(id = id, sequence = index + 1)
+        }
+        statusMessage = "已开始并发生成 ${requestForm.batchCount} 张图片"
 
         viewModelScope.launch {
-            try {
-                val initial = client.submitJob(
-                    requestForm.toJobPayload(
-                        token = token,
-                        model = serviceSettings?.defaultModel ?: "nai-diffusion-4-5-full"
-                    )
-                )
-                val completed = client.waitForCompletion(initial, token) { job ->
-                    statusMessage = when (job.status) {
-                        JobStatus.QUEUED -> if (job.queuePosition > 0) {
-                            "排队中：第 ${job.queuePosition} / ${job.queuedCount.coerceAtLeast(1)} 个"
-                        } else {
-                            "已提交，等待可用账号"
-                        }
-                        JobStatus.RUNNING -> "正在生成：${job.progress.percent}%"
-                        JobStatus.DONE -> "图片生成完成，正在保存到应用图库……"
-                        else -> "正在处理……"
-                    }
+            val succeeded = taskIds.mapIndexed { index, taskId ->
+                async {
+                    generateOne(taskId, index + 1, requestForm, token, client, model)
                 }
-                if (completed.imageUrl.isBlank()) throw NaiApiException("服务未返回图片地址")
-
-                val fileName = "nai_${timestampForFileName()}.png"
-                val localUri = imageStorage.saveRemoteImageToAppGallery(client, completed.imageUrl, token, fileName)
-                val record = ImageRecord(
-                    id = UUID.randomUUID().toString(),
-                    localUri = localUri.toString(),
-                    createdAt = System.currentTimeMillis(),
-                    prompt = requestForm.prompt.trim(),
-                    archiveTags = defaultArchiveTags(requestForm),
-                    artist = requestForm.artist.trim(),
-                    negativePrompt = requestForm.negativePrompt.trim(),
-                    presetName = requestForm.presetName,
-                    favorite = false,
-                    savedToDevice = false
-                )
-                withContext(Dispatchers.IO) { database.insertImage(record) }
-                refreshGallery()
-                refreshBalance()
-                statusMessage = "生成完成，已存入应用图库，可在详情中保存到系统图库"
-            } catch (error: Throwable) {
-                statusMessage = "生成失败：${error.message ?: "未知错误"}"
-            } finally {
-                isGenerating = false
+            }.awaitAll().count { it }
+            loadGallery()
+            refreshBalance()
+            isGenerating = false
+            val failed = requestForm.batchCount - succeeded
+            statusMessage = if (failed == 0) {
+                "$succeeded 张图片已生成并存入应用图库"
+            } else {
+                "生成完成：成功 $succeeded 张，失败 $failed 张"
             }
+        }
+    }
+
+    private suspend fun generateOne(
+        taskId: String,
+        sequence: Int,
+        requestForm: GenerationForm,
+        token: String,
+        client: NaiApiClient,
+        model: String
+    ): Boolean = runCatching {
+        val initial = client.submitJob(requestForm.toJobPayload(token = token, model = model))
+        val completed = client.waitForCompletion(initial, token) { job ->
+            updateGenerationTask(taskId) { task ->
+                when (job.status) {
+                    JobStatus.QUEUED -> task.copy(
+                        status = GenerationTaskStatus.QUEUED,
+                        message = if (job.queuePosition > 0) {
+                            "排队第 ${job.queuePosition} / ${job.queuedCount.coerceAtLeast(1)} 位"
+                        } else {
+                            "等待可用账号"
+                        }
+                    )
+                    JobStatus.RUNNING -> task.copy(
+                        status = GenerationTaskStatus.RUNNING,
+                        progress = job.progress.percent.coerceIn(0, 100),
+                        message = "生成中 ${job.progress.percent.coerceIn(0, 100)}%"
+                    )
+                    JobStatus.DONE -> task.copy(
+                        status = GenerationTaskStatus.SAVING,
+                        progress = 100,
+                        message = "正在保存到应用图库"
+                    )
+                    else -> task
+                }
+            }
+        }
+        if (completed.imageUrl.isBlank()) throw NaiApiException("服务未返回图片地址")
+
+        val localUri = imageStorage.saveRemoteImageToAppGallery(
+            client = client,
+            imageUrl = completed.imageUrl,
+            token = token,
+            displayName = "nai_${timestampForFileName()}_${sequence}.png"
+        )
+        val record = ImageRecord(
+            id = UUID.randomUUID().toString(),
+            localUri = localUri.toString(),
+            createdAt = System.currentTimeMillis(),
+            prompt = requestForm.prompt.trim(),
+            archiveTags = defaultArchiveTags(requestForm),
+            artist = requestForm.artist.trim(),
+            negativePrompt = requestForm.negativePrompt.trim(),
+            presetName = requestForm.presetName,
+            favorite = false,
+            savedToDevice = false,
+            parameters = requestForm.toGenerationParameters(model).copy(jobId = completed.id)
+        )
+        withContext(Dispatchers.IO) { database.insertImage(record) }
+        latestGeneratedImage = record
+        updateGenerationTask(taskId) {
+            it.copy(
+                status = GenerationTaskStatus.DONE,
+                progress = 100,
+                message = "已保存到应用图库",
+                imageId = record.id
+            )
+        }
+        true
+    }.getOrElse { error ->
+        updateGenerationTask(taskId) {
+            it.copy(
+                status = GenerationTaskStatus.FAILED,
+                message = error.message ?: "未知错误"
+            )
+        }
+        false
+    }
+
+    private fun updateGenerationTask(
+        taskId: String,
+        transform: (GenerationTaskUiState) -> GenerationTaskUiState
+    ) {
+        generationTasks = generationTasks.map { task ->
+            if (task.id == taskId) transform(task) else task
         }
     }
 
@@ -256,9 +339,8 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 var exportedCount = 0
                 var failedCount = 0
-                val pending = selected.filterNot(ImageRecord::isSavedToSystemGallery)
                 val exportedIds = mutableSetOf<String>()
-                pending.forEach { image ->
+                selected.forEach { image ->
                     runCatching {
                         imageStorage.exportToSystemGallery(
                             source = Uri.parse(image.localUri),
@@ -271,14 +353,12 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
                         failedCount++
                     }
                 }
-                withContext(Dispatchers.IO) { database.markSavedToDevice(exportedIds) }
+                withContext(Dispatchers.IO) { database.recordExports(exportedIds) }
                 loadGallery()
                 gallerySelection = GallerySelection()
                 gallerySelectionMode = false
-                val alreadySavedCount = selected.size - pending.size
                 statusMessage = when {
                     failedCount > 0 -> "已导出 $exportedCount 张，$failedCount 张失败"
-                    exportedCount == 0 && alreadySavedCount > 0 -> "所选图片已经全部导出过了"
                     else -> "已批量导出 $exportedCount 张图片到系统相册"
                 }
             } catch (error: Throwable) {
@@ -334,10 +414,6 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveImageToDevice(image: ImageRecord) {
-        if (image.isSavedToSystemGallery()) {
-            statusMessage = "这张图片已经在系统图库中"
-            return
-        }
         viewModelScope.launch {
             statusMessage = "正在保存到系统图库……"
             runCatching {
@@ -345,7 +421,7 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
                     source = Uri.parse(image.localUri),
                     displayName = "nai_${image.id}.png"
                 )
-                withContext(Dispatchers.IO) { database.markSavedToDevice(image.id) }
+                withContext(Dispatchers.IO) { database.recordExport(image.id) }
                 loadGallery()
             }.onSuccess {
                 statusMessage = "已保存到系统图库 Pictures/Nai2API"
@@ -432,3 +508,4 @@ class NaiViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
     }
 }
+
