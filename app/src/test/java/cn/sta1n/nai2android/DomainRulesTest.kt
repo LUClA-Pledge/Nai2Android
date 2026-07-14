@@ -64,6 +64,79 @@ class DomainRulesTest {
     }
 
     @Test
+    fun generation_form_snapshots_every_gallery_visible_parameter() {
+        val form = GenerationForm(
+            prompt = "subject",
+            artist = "artist",
+            negativePrompt = "bad hands",
+            size = "2Ksize",
+            steps = 24,
+            scale = 7.5,
+            cfg = 0.4,
+            sampler = "k_euler"
+        )
+        val payload = form.toJobPayload("STA1N-test", model = "nai-test-model")
+        val metadata = form.toGenerationMetadata(model = "nai-test-model")
+
+        assertEquals(payload.model, metadata.model)
+        assertEquals(payload.size, metadata.size)
+        assertEquals(payload.steps, metadata.steps)
+        assertEquals(payload.scale, metadata.scale)
+        assertEquals(payload.cfg, metadata.cfg)
+        assertEquals(payload.sampler, metadata.sampler)
+        assertEquals(payload.cost, metadata.cost)
+        assertEquals(payload.nocache, metadata.nocache)
+        assertEquals(payload.noiseSchedule, metadata.noiseSchedule)
+    }
+
+    @Test
+    fun applying_a_preset_replaces_the_archive_tag_with_the_preset_name() {
+        val preset = Preset(
+            id = "preset",
+            name = "Night scene",
+            tag = "night, rain",
+            artist = "artist",
+            negativePrompt = "day",
+            createdAt = 1,
+            updatedAt = 1
+        )
+
+        val applied = GenerationForm(archiveTags = "old tag").applyPreset(preset)
+
+        assertEquals("Night scene", applied.archiveTags)
+        assertEquals("Night scene", applied.presetName)
+        assertEquals("night, rain", applied.prompt)
+        assertEquals(listOf("Night scene"), defaultArchiveTags(applied))
+    }
+
+    @Test
+    fun batch_count_is_limited_to_a_bounded_concurrency_range() {
+        assertEquals(1, GenerationForm(batchCount = 0).normalizedBatchCount())
+        assertEquals(3, GenerationForm(batchCount = 3).normalizedBatchCount())
+        assertEquals(4, GenerationForm(batchCount = 99).normalizedBatchCount())
+    }
+
+    @Test
+    fun export_count_keeps_an_image_exportable_after_the_first_export() {
+        val image = testImage().copy(savedToDevice = false, exportCount = 2)
+
+        assertTrue(image.isSavedToSystemGallery())
+        assertEquals(2, image.exportCount)
+    }
+
+    @Test
+    fun cancelled_generation_task_is_terminal() {
+        assertFalse(GenerationTask(id = "pending", ordinal = 1).isTerminal())
+        assertTrue(
+            GenerationTask(
+                id = "cancelled",
+                ordinal = 1,
+                state = GenerationTaskState.CANCELLED
+            ).isTerminal()
+        )
+    }
+
+    @Test
     fun website_artist_presets_match_the_create_page_defaults() {
         assertEquals(6, WEBSITE_ARTIST_PRESETS.size)
         assertEquals("韩漫小清新风", WEBSITE_ARTIST_PRESETS.first().label)

@@ -25,7 +25,17 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
                 negative_prompt TEXT NOT NULL,
                 preset_name TEXT NOT NULL,
                 favorite INTEGER NOT NULL DEFAULT 0,
-                saved_to_device INTEGER NOT NULL DEFAULT 0
+                saved_to_device INTEGER NOT NULL DEFAULT 0,
+                export_count INTEGER NOT NULL DEFAULT 0,
+                generation_model TEXT NOT NULL DEFAULT '',
+                generation_size TEXT NOT NULL DEFAULT '',
+                generation_steps INTEGER NOT NULL DEFAULT 0,
+                generation_scale REAL NOT NULL DEFAULT 0,
+                generation_cfg REAL NOT NULL DEFAULT 0,
+                generation_sampler TEXT NOT NULL DEFAULT '',
+                generation_cost INTEGER NOT NULL DEFAULT 0,
+                generation_nocache TEXT NOT NULL DEFAULT '',
+                generation_noise_schedule TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent()
         )
@@ -49,6 +59,23 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
             db.execSQL(
                 "ALTER TABLE image_records ADD COLUMN saved_to_device INTEGER NOT NULL DEFAULT 0"
             )
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE image_records ADD COLUMN export_count INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE image_records ADD COLUMN generation_model TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE image_records ADD COLUMN generation_size TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE image_records ADD COLUMN generation_steps INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE image_records ADD COLUMN generation_scale REAL NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE image_records ADD COLUMN generation_cfg REAL NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE image_records ADD COLUMN generation_sampler TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE image_records ADD COLUMN generation_cost INTEGER NOT NULL DEFAULT 0")
+            db.execSQL(
+                "UPDATE image_records SET export_count = CASE WHEN saved_to_device != 0 THEN 1 ELSE 0 END"
+            )
+        }
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE image_records ADD COLUMN generation_nocache TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE image_records ADD COLUMN generation_noise_schedule TEXT NOT NULL DEFAULT ''")
         }
     }
 
@@ -86,20 +113,18 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
         )
     }
 
-    fun markSavedToDevice(id: String) {
-        writableDatabase.update(
-            "image_records",
-            ContentValues().apply { put("saved_to_device", 1) },
-            "id = ?",
+    fun recordExport(id: String) {
+        writableDatabase.execSQL(
+            "UPDATE image_records SET saved_to_device = 1, export_count = export_count + 1 WHERE id = ?",
             arrayOf(id)
         )
     }
 
-    fun markSavedToDevice(ids: Set<String>) {
+    fun recordExports(ids: Set<String>) {
         if (ids.isEmpty()) return
         writableDatabase.beginTransaction()
         try {
-            ids.forEach(::markSavedToDevice)
+            ids.forEach(::recordExport)
             writableDatabase.setTransactionSuccessful()
         } finally {
             writableDatabase.endTransaction()
@@ -172,7 +197,19 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
             negativePrompt = getString(getColumnIndexOrThrow("negative_prompt")),
             presetName = getString(getColumnIndexOrThrow("preset_name")),
             favorite = getInt(getColumnIndexOrThrow("favorite")) != 0,
-            savedToDevice = getInt(getColumnIndexOrThrow("saved_to_device")) != 0
+            savedToDevice = getInt(getColumnIndexOrThrow("saved_to_device")) != 0,
+            exportCount = getInt(getColumnIndexOrThrow("export_count")),
+            generation = GenerationMetadata(
+                model = getString(getColumnIndexOrThrow("generation_model")),
+                size = getString(getColumnIndexOrThrow("generation_size")),
+                steps = getInt(getColumnIndexOrThrow("generation_steps")),
+                scale = getDouble(getColumnIndexOrThrow("generation_scale")),
+                cfg = getDouble(getColumnIndexOrThrow("generation_cfg")),
+                sampler = getString(getColumnIndexOrThrow("generation_sampler")),
+                cost = getInt(getColumnIndexOrThrow("generation_cost")),
+                nocache = getString(getColumnIndexOrThrow("generation_nocache")),
+                noiseSchedule = getString(getColumnIndexOrThrow("generation_noise_schedule"))
+            )
         )
     }
 
@@ -199,6 +236,16 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
         put("preset_name", presetName)
         put("favorite", if (favorite) 1 else 0)
         put("saved_to_device", if (savedToDevice) 1 else 0)
+        put("export_count", exportCount)
+        put("generation_model", generation.model)
+        put("generation_size", generation.size)
+        put("generation_steps", generation.steps)
+        put("generation_scale", generation.scale)
+        put("generation_cfg", generation.cfg)
+        put("generation_sampler", generation.sampler)
+        put("generation_cost", generation.cost)
+        put("generation_nocache", generation.nocache)
+        put("generation_noise_schedule", generation.noiseSchedule)
     }
 
     private fun Preset.toContentValues() = ContentValues().apply {
@@ -213,7 +260,7 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
 
     private companion object {
         const val DATABASE_NAME = "nai2android.db"
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 4
         const val TAG_SEPARATOR = "\u001F"
 
         fun encodeTags(tags: List<String>): String = tags.joinToString(TAG_SEPARATOR)

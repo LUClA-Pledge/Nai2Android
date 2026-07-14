@@ -466,7 +466,11 @@ private fun GalleryTile(
                         }
                     )
                     Text(
-                        if (image.isSavedToSystemGallery()) "已导出到系统相册" else "仅存应用图库",
+                        if (image.isSavedToSystemGallery()) {
+                            "已导出 ${image.exportCount.coerceAtLeast(1)} 次"
+                        } else {
+                            "仅存应用图库"
+                        },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp,
                         maxLines = 1
@@ -478,7 +482,7 @@ private fun GalleryTile(
 }
 
 @Composable
-private fun LocalImage(
+internal fun LocalImage(
     uri: String,
     resolver: ContentResolver,
     modifier: Modifier = Modifier,
@@ -592,21 +596,20 @@ private fun ImageDetailDialog(
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                "已导出到系统相册 Pictures/Nai2API",
+                                "已导出 ${image.exportCount.coerceAtLeast(1)} 次到系统相册",
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 fontSize = 12.sp
                             )
                         }
                     }
-                } else {
-                    Button(
-                        onClick = onSaveToDevice,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Filled.Download, contentDescription = null)
-                        Spacer(Modifier.size(8.dp))
-                        Text("导出到系统相册")
-                    }
+                }
+                Button(
+                    onClick = onSaveToDevice,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.Download, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(if (image.exportCount > 0) "再次导出到系统相册" else "导出到系统相册")
                 }
                 OutlinedTextField(
                     value = tags,
@@ -618,8 +621,24 @@ private fun ImageDetailDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 DetailText("Prompt", image.prompt)
+                if (image.presetName.isNotBlank()) DetailText("预设", image.presetName)
                 if (image.artist.isNotBlank()) DetailText("Artist", image.artist)
                 if (image.negativePrompt.isNotBlank()) DetailText("反向提示词", image.negativePrompt)
+                if (!image.generation.isEmpty()) {
+                    DetailText("模型", image.generation.model)
+                    DetailText("画幅", image.generation.size)
+                    DetailText("步数", image.generation.steps.toString())
+                    DetailText("Scale", image.generation.scale.toString())
+                    DetailText("CFG", image.generation.cfg.toString())
+                    DetailText("采样器", image.generation.sampler)
+                    DetailText("消耗", "${image.generation.cost} 点")
+                    if (image.generation.nocache.isNotBlank()) {
+                        DetailText("缓存", if (image.generation.nocache == "1") "不使用缓存" else image.generation.nocache)
+                    }
+                    if (image.generation.noiseSchedule.isNotBlank()) {
+                        DetailText("噪声调度", image.generation.noiseSchedule)
+                    }
+                }
             }
         },
         confirmButton = {
