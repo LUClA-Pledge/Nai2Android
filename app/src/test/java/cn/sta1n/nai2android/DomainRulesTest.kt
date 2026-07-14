@@ -64,6 +64,66 @@ class DomainRulesTest {
     }
 
     @Test
+    fun applying_a_preset_updates_the_archive_tag_to_the_preset_name() {
+        val now = 100L
+        val preset = Preset(
+            id = "preset-2",
+            name = "雨夜霓虹",
+            tag = "1girl, rain, neon",
+            artist = "artist",
+            negativePrompt = "bad hands",
+            createdAt = now,
+            updatedAt = now
+        )
+
+        val result = GenerationForm(archiveTags = "旧预设").withPreset(preset)
+
+        assertEquals("雨夜霓虹", result.archiveTags)
+        assertEquals("雨夜霓虹", result.presetName)
+        assertEquals("1girl, rain, neon", result.prompt)
+    }
+
+    @Test
+    fun generation_parameters_keep_every_value_needed_by_image_details() {
+        val form = GenerationForm(
+            size = "2K横图",
+            steps = 24,
+            scale = 7.5,
+            cfg = 0.4,
+            sampler = "k_euler"
+        )
+
+        val parameters = form.toGenerationParameters("nai-diffusion-4-5-full")
+
+        assertEquals("nai-diffusion-4-5-full", parameters.model)
+        assertEquals("2K横图", parameters.size)
+        assertEquals(15, parameters.cost)
+        assertEquals(24, parameters.steps)
+        assertEquals(7.5, parameters.scale)
+        assertEquals(0.4, parameters.cfg)
+        assertEquals("k_euler", parameters.sampler)
+        assertEquals("karras", parameters.noiseSchedule)
+        assertTrue(parameters.noCache)
+    }
+
+    @Test
+    fun recording_an_export_increments_the_count_every_time() {
+        val once = testImage().recordExport()
+        val twice = once.recordExport()
+
+        assertEquals(1, once.exportCount)
+        assertEquals(2, twice.exportCount)
+        assertTrue(twice.isSavedToSystemGallery())
+    }
+
+    @Test
+    fun batch_count_is_clamped_to_supported_concurrency_range() {
+        assertEquals(1, normalizedBatchCount(0))
+        assertEquals(3, normalizedBatchCount(3))
+        assertEquals(4, normalizedBatchCount(99))
+    }
+
+    @Test
     fun website_artist_presets_match_the_create_page_defaults() {
         assertEquals(6, WEBSITE_ARTIST_PRESETS.size)
         assertEquals("韩漫小清新风", WEBSITE_ARTIST_PRESETS.first().label)
@@ -89,3 +149,4 @@ class DomainRulesTest {
         savedToDevice = false
     )
 }
+
