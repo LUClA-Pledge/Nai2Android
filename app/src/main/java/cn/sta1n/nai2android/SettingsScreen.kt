@@ -195,7 +195,7 @@ fun SettingsScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("生成与存储", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "生成结果先进入应用图库，是否导出由你决定",
+                        "生成结果会先显示在创作页，归档后才进入应用图库",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )
@@ -221,15 +221,6 @@ fun SettingsScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
             )
         }
 
-        if (viewModel.statusMessage.isNotBlank()) {
-            StudioCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                Text(
-                    viewModel.statusMessage,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
         Spacer(Modifier.size(8.dp))
     }
 }

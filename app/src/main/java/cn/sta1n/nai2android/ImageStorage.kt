@@ -12,19 +12,33 @@ import java.io.FileInputStream
 import java.io.InputStream
 
 class ImageStorage(private val context: Context) {
-    suspend fun saveRemoteImageToAppGallery(
+    suspend fun saveRemoteImageToGenerationPreview(
         client: NaiApiClient,
         imageUrl: String,
         token: String,
         displayName: String
     ): Uri = withContext(Dispatchers.IO) {
-        val galleryDirectory = File(context.filesDir, APP_GALLERY_DIRECTORY).apply { mkdirs() }
-        val target = File(galleryDirectory, displayName.safeFileName())
-        target.outputStream().use { output ->
-            client.downloadImageTo(imageUrl, token, output)
+        val previewDirectory = File(context.filesDir, GENERATION_PREVIEW_DIRECTORY).apply { mkdirs() }
+        val target = File(previewDirectory, displayName.safeFileName())
+        try {
+            target.outputStream().use { output ->
+                client.downloadImageTo(imageUrl, token, output)
+            }
+        } catch (error: Throwable) {
+            target.delete()
+            throw error
         }
         Uri.fromFile(target)
     }
+
+    suspend fun copyGenerationPreviewToAppGallery(source: Uri, displayName: String): Uri =
+        withContext(Dispatchers.IO) {
+            val sourceFile = generationPreviewFile(source)
+            val galleryDirectory = File(context.filesDir, APP_GALLERY_DIRECTORY).apply { mkdirs() }
+            val target = File(galleryDirectory, displayName.safeFileName())
+            sourceFile.copyTo(target, overwrite = true)
+            Uri.fromFile(target)
+        }
 
     suspend fun exportToSystemGallery(source: Uri, displayName: String): Uri = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
@@ -66,14 +80,35 @@ class ImageStorage(private val context: Context) {
         }.getOrDefault(false)
     }
 
+    fun clearGenerationPreviews() {
+        File(context.filesDir, GENERATION_PREVIEW_DIRECTORY)
+            .listFiles()
+            ?.forEach { file -> if (file.isFile) file.delete() }
+    }
+
+    fun deleteGenerationPreview(source: Uri): Boolean = runCatching {
+        generationPreviewFile(source).delete()
+    }.getOrDefault(false)
+
     private fun openInputStream(uri: Uri): InputStream? = when (uri.scheme) {
         "file" -> uri.path?.let { FileInputStream(File(it)) }
         else -> context.contentResolver.openInputStream(uri)
+    }
+
+    private fun generationPreviewFile(uri: Uri): File {
+        require(uri.scheme == "file") { "Only generated previews can be archived" }
+        val previewDirectory = File(context.filesDir, GENERATION_PREVIEW_DIRECTORY).canonicalFile
+        val sourceFile = File(requireNotNull(uri.path)).canonicalFile
+        require(sourceFile.path.startsWith(previewDirectory.path + File.separator)) {
+            "Preview is outside the managed directory"
+        }
+        return sourceFile
     }
 
     private fun String.safeFileName(): String = replace(Regex("[^A-Za-z0-9._-]"), "_")
 
     private companion object {
         const val APP_GALLERY_DIRECTORY = "gallery"
+        const val GENERATION_PREVIEW_DIRECTORY = "generation-previews"
     }
 }

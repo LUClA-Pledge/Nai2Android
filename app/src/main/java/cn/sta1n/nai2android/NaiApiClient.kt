@@ -1,7 +1,9 @@
 package cn.sta1n.nai2android
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedInputStream
@@ -11,6 +13,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.ConcurrentHashMap
 
 data class ServiceSettings(
     val serviceName: String,
@@ -46,6 +49,11 @@ class NaiApiException(message: String, val statusCode: Int? = null) : Exception(
 
 class NaiApiClient(baseUrl: String) {
     private val baseUrl = baseUrl.trim().trimEnd('/').ifEmpty { DEFAULT_BASE_URL }
+    private val activeConnections = ConcurrentHashMap.newKeySet<HttpURLConnection>()
+
+    fun cancelActiveRequests() {
+        activeConnections.forEach(HttpURLConnection::disconnect)
+    }
 
     suspend fun getSettings(): ServiceSettings = withContext(Dispatchers.IO) {
         requestJson("GET", "/api/settings").let { json ->
@@ -118,9 +126,12 @@ class NaiApiClient(baseUrl: String) {
         output: OutputStream
     ): String = withContext(Dispatchers.IO) {
         val connection = openConnection(resolveUrl(imageUrl), "GET")
+        activeConnections += connection
+        val coroutineContext = currentCoroutineContext()
         connection.setRequestProperty("x-user-token", token)
         connection.setRequestProperty("Accept", "image/*")
         try {
+            coroutineContext.ensureActive()
             val status = connection.responseCode
             if (status !in 200..299) {
                 throw NaiApiException("图片下载失败（HTTP $status）", status)
@@ -128,18 +139,23 @@ class NaiApiClient(baseUrl: String) {
             BufferedInputStream(connection.inputStream).use { input ->
                 BufferedOutputStream(output).use { bufferedOutput ->
                     input.copyTo(bufferedOutput)
+                    coroutineContext.ensureActive()
                     bufferedOutput.flush()
                 }
             }
             connection.contentType.orEmpty()
         } finally {
+            activeConnections.remove(connection)
             connection.disconnect()
         }
     }
 
-    private fun requestJson(method: String, path: String, body: String? = null): JSONObject {
+    private suspend fun requestJson(method: String, path: String, body: String? = null): JSONObject {
         val connection = openConnection(resolveUrl(path), method)
+        activeConnections += connection
+        val coroutineContext = currentCoroutineContext()
         try {
+            coroutineContext.ensureActive()
             if (body != null) {
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -152,6 +168,7 @@ class NaiApiClient(baseUrl: String) {
                 ?.bufferedReader(StandardCharsets.UTF_8)
                 ?.use { it.readText() }
                 .orEmpty()
+            coroutineContext.ensureActive()
             if (status !in 200..299) {
                 val message = runCatching { JSONObject(responseText).optString("error") }
                     .getOrNull()
@@ -161,6 +178,7 @@ class NaiApiClient(baseUrl: String) {
             }
             return if (responseText.isBlank()) JSONObject() else JSONObject(responseText)
         } finally {
+            activeConnections.remove(connection)
             connection.disconnect()
         }
     }

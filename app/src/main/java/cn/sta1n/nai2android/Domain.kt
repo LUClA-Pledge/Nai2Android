@@ -12,13 +12,54 @@ data class ImageRecord(
     val negativePrompt: String,
     val presetName: String,
     val favorite: Boolean,
-    val savedToDevice: Boolean = false
+    val savedToDevice: Boolean = false,
+    val exportCount: Int = 0,
+    val generation: GenerationMetadata = GenerationMetadata()
 ) {
     fun matchesArchiveTag(tag: String): Boolean = archiveTags.any {
         it.trim().equals(tag.trim(), ignoreCase = true)
     }
 
-    fun isSavedToSystemGallery(): Boolean = savedToDevice || localUri.startsWith("content://")
+    fun isSavedToSystemGallery(): Boolean =
+        exportCount > 0 || savedToDevice || localUri.startsWith("content://")
+}
+
+data class GenerationMetadata(
+    val model: String = "",
+    val size: String = "",
+    val steps: Int = 0,
+    val scale: Double = 0.0,
+    val cfg: Double = 0.0,
+    val sampler: String = "",
+    val cost: Int = 0,
+    val nocache: String = "",
+    val noiseSchedule: String = ""
+) {
+    fun isEmpty(): Boolean = model.isBlank() && size.isBlank() && sampler.isBlank()
+}
+
+enum class GenerationTaskState {
+    SUBMITTING,
+    QUEUED,
+    RUNNING,
+    DOWNLOADING,
+    COMPLETED,
+    FAILED,
+    CANCELLED
+}
+
+data class GenerationTask(
+    val id: String,
+    val ordinal: Int,
+    val state: GenerationTaskState = GenerationTaskState.SUBMITTING,
+    val progress: Int = 0,
+    val message: String = ""
+) {
+    fun isTerminal(): Boolean = state in setOf(
+        GenerationTaskState.COMPLETED,
+        GenerationTaskState.FAILED,
+        GenerationTaskState.CANCELLED
+    )
 }
 
 data class Preset(
@@ -41,6 +82,7 @@ data class GenerationForm(
     val scale: Double = 6.0,
     val cfg: Double = 0.0,
     val sampler: String = "k_dpmpp_2m_sde",
+    val batchCount: Int = 1,
     val presetName: String = ""
 )
 
@@ -107,22 +149,49 @@ fun generationCostForSize(size: String): Int = when (size) {
     else -> 1
 }
 
-fun GenerationForm.toJobPayload(
-    token: String,
-    model: String = "nai-diffusion-4-5-full"
-): JobPayload = JobPayload(
-    token = token,
-    tag = prompt.trim(),
-    model = model,
-    artist = artist.trim(),
+fun GenerationForm.normalizedBatchCount(): Int = batchCount.coerceIn(1, MAX_CONCURRENT_GENERATIONS)
+
+fun GenerationForm.applyPreset(preset: Preset): GenerationForm = copy(
+    prompt = preset.tag,
+    archiveTags = preset.name,
+    artist = preset.artist,
+    negativePrompt = preset.negativePrompt,
+    presetName = preset.name
+)
+
+fun GenerationForm.toGenerationMetadata(model: String): GenerationMetadata = GenerationMetadata(
+    model = model.trim(),
     size = size,
-    cost = generationCostForSize(size),
     steps = steps.coerceIn(1, 28),
     scale = scale.coerceIn(1.0, 20.0),
     cfg = cfg.coerceIn(0.0, 1.0),
     sampler = sampler,
-    negative = negativePrompt.trim()
+    cost = generationCostForSize(size),
+    nocache = "1",
+    noiseSchedule = "karras"
 )
+
+fun GenerationForm.toJobPayload(
+    token: String,
+    model: String = "nai-diffusion-4-5-full"
+): JobPayload {
+    val metadata = toGenerationMetadata(model)
+    return JobPayload(
+        token = token,
+        tag = prompt.trim(),
+        model = metadata.model,
+        artist = artist.trim(),
+        size = metadata.size,
+        cost = metadata.cost,
+        steps = metadata.steps,
+        scale = metadata.scale,
+        cfg = metadata.cfg,
+        sampler = metadata.sampler,
+        negative = negativePrompt.trim(),
+        nocache = metadata.nocache,
+        noiseSchedule = metadata.noiseSchedule
+    )
+}
 
 fun defaultArchiveTags(form: GenerationForm): List<String> {
     val explicit = normalizeArchiveTags(form.archiveTags)
@@ -131,3 +200,5 @@ fun defaultArchiveTags(form: GenerationForm): List<String> {
     return listOfNotNull(form.presetName.trim().takeIf(String::isNotEmpty), presetTag)
         .distinctBy { it.lowercase(Locale.ROOT) }
 }
+
+const val MAX_CONCURRENT_GENERATIONS = 4

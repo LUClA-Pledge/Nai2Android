@@ -1,5 +1,6 @@
 package cn.sta1n.nai2android
 
+import android.content.ContentResolver
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,15 +14,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,14 +39,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.width
 
+internal const val CREATE_MULTILINE_FIELD_MAX_LINES = 4
+
+internal fun createMultilineFieldMaxLines(minLines: Int): Int =
+    maxOf(minLines, CREATE_MULTILINE_FIELD_MAX_LINES)
+
 @Composable
 fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
     val form = viewModel.form
+    val resolver = LocalContext.current.contentResolver
     LazyColumn(
         modifier = modifier.imePadding(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -99,7 +113,7 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 value = form.prompt,
                 onValueChange = { value -> viewModel.updateForm { it.copy(prompt = value) } },
                 placeholder = "1girl, solo, rain, neon street",
-                minLines = 5
+                minLines = 4
             )
             FieldHint("这个内容会直接发送给 Nai2API，逗号和换行都可以继续追加。")
             MultilineField(
@@ -121,7 +135,7 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 value = form.artist,
                 onValueChange = { value -> viewModel.updateForm { it.copy(artist = value) } },
                 placeholder = "artist、质量词和风格词",
-                minLines = 4
+                minLines = 3
             )
             Text(
                 "网站 artist 预设",
@@ -152,7 +166,7 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 value = form.negativePrompt,
                 onValueChange = { value -> viewModel.updateForm { it.copy(negativePrompt = value) } },
                 placeholder = "bad hands, blurry, watermark ...",
-                minLines = 4
+                minLines = 3
             )
             }
         }
@@ -199,51 +213,228 @@ fun CreateScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
                 ),
                 onValueChange = { value -> viewModel.updateForm { it.copy(sampler = value) } }
             )
+            ConcurrentCountSelector(
+                count = form.normalizedBatchCount(),
+                onDecrease = {
+                    viewModel.updateForm { current ->
+                        current.copy(batchCount = (current.batchCount - 1).coerceAtLeast(1))
+                    }
+                },
+                onIncrease = {
+                    viewModel.updateForm { current ->
+                        current.copy(batchCount = (current.batchCount + 1).coerceAtMost(MAX_CONCURRENT_GENERATIONS))
+                    }
+                }
+            )
             }
         }
 
-        if (viewModel.statusMessage.isNotBlank()) {
+        if (viewModel.generationTasks.isNotEmpty()) {
             item {
-                StudioCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(
-                        Icons.Filled.AutoAwesome,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                    Text(
-                        viewModel.statusMessage,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                }
+                GenerationTaskStatusCard(viewModel.generationTasks)
+            }
+        }
+
+        viewModel.currentGeneratedImage?.let { image ->
+            item {
+                CurrentGenerationPreview(
+                    image = image,
+                    images = viewModel.generatedImages,
+                    archived = viewModel.isGeneratedImageArchived(image),
+                    actionRunning = viewModel.isGeneratedImageActionRunning,
+                    resolver = resolver,
+                    onSelect = viewModel::selectGeneratedImage,
+                    onArchive = { viewModel.archiveGeneratedImage(image) },
+                    onExport = { viewModel.saveGeneratedImageToDevice(image) }
+                )
             }
         }
 
         item {
-            Button(
-            onClick = viewModel::generate,
-            enabled = !viewModel.isGenerating,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
-            ) {
-            Icon(Icons.Filled.AutoAwesome, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                if (viewModel.isGenerating) "正在生成……" else "生成图片 · ${generationCostForSize(form.size)} 点",
-                fontWeight = FontWeight.Bold
-            )
+            if (viewModel.isGenerating) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = {},
+                        enabled = false,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("正在生成……", fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = viewModel::cancelGeneration,
+                        modifier = Modifier.height(56.dp),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Icon(Icons.Filled.Close, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("取消")
+                    }
+                }
+            } else {
+                Button(
+                    onClick = viewModel::generate,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "生成 ${form.normalizedBatchCount()} 张 · ${generationCostForSize(form.size) * form.normalizedBatchCount()} 点",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
         item { Spacer(Modifier.height(8.dp)) }
     }
+}
+
+@Composable
+private fun ConcurrentCountSelector(
+    count: Int,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        Text("并发数量", fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            IconButton(onClick = onDecrease, enabled = count > 1) {
+                Icon(Icons.Filled.Remove, contentDescription = "减少并发数量")
+            }
+            Text("$count 张", fontWeight = FontWeight.Bold)
+            IconButton(onClick = onIncrease, enabled = count < MAX_CONCURRENT_GENERATIONS) {
+                Icon(Icons.Filled.Add, contentDescription = "增加并发数量")
+            }
+        }
+    }
+}
+
+@Composable
+private fun GenerationTaskStatusCard(tasks: List<GenerationTask>) {
+    StudioCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
+        Text("生成任务", fontWeight = FontWeight.Bold)
+        tasks.forEach { task ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Text("第 ${task.ordinal} 张", fontSize = 13.sp)
+                Text(
+                    generationTaskStatusText(task),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CurrentGenerationPreview(
+    image: ImageRecord,
+    images: List<ImageRecord>,
+    archived: Boolean,
+    actionRunning: Boolean,
+    resolver: ContentResolver,
+    onSelect: (String) -> Unit,
+    onArchive: () -> Unit,
+    onExport: () -> Unit
+) {
+    StudioCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("当前生成结果", fontWeight = FontWeight.Bold)
+                Text(
+                    if (archived) "已归档到应用图库" else "预览尚未进入应用图库",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
+            Text(
+                "已导出 ${image.exportCount} 次",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        if (images.size > 1) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                images.forEachIndexed { index, candidate ->
+                    FilterChip(
+                        selected = candidate.id == image.id,
+                        onClick = { onSelect(candidate.id) },
+                        label = { Text("结果 ${images.size - index}") }
+                    )
+                }
+            }
+        }
+        LocalImage(
+            uri = image.localUri,
+            resolver = resolver,
+            modifier = Modifier.fillMaxWidth(),
+            preserveAspectRatio = true
+        )
+        Text(
+            listOfNotNull(
+                image.generation.size.takeIf(String::isNotBlank),
+                "${image.generation.steps} steps".takeIf { image.generation.steps > 0 },
+                image.generation.sampler.takeIf(String::isNotBlank)
+            ).joinToString(" · "),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp
+        )
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (!archived) {
+                Button(onClick = onArchive, enabled = !actionRunning) {
+                    Icon(Icons.Filled.Collections, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("归档到图库")
+                }
+            }
+            OutlinedButton(onClick = onExport, enabled = !actionRunning) {
+                Icon(Icons.Filled.Download, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text(if (image.exportCount > 0) "再次导出" else "导出到系统相册")
+            }
+        }
+    }
+}
+
+private fun generationTaskStatusText(task: GenerationTask): String = when (task.state) {
+    GenerationTaskState.SUBMITTING -> "正在提交"
+    GenerationTaskState.QUEUED -> task.message.ifBlank { "排队中" }
+    GenerationTaskState.RUNNING -> "正在生成 ${task.progress}%"
+    GenerationTaskState.DOWNLOADING -> "正在下载"
+    GenerationTaskState.COMPLETED -> "已完成"
+    GenerationTaskState.FAILED -> task.message.ifBlank { "生成失败" }
+    GenerationTaskState.CANCELLED -> "已取消"
 }
 
 @Composable
@@ -260,6 +451,7 @@ private fun MultilineField(
         label = { Text(label) },
         placeholder = { Text(placeholder) },
         minLines = minLines,
+        maxLines = createMultilineFieldMaxLines(minLines),
         shape = MaterialTheme.shapes.small,
         modifier = Modifier.fillMaxWidth()
     )
