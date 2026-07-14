@@ -18,10 +18,14 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -31,8 +35,17 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NaiApp(viewModel: NaiViewModel) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(viewModel.statusMessage) {
+        val message = viewModel.statusMessage
+        if (message.isNotBlank()) {
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearStatusMessage()
+        }
+    }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 navigationIcon = {
@@ -147,3 +160,4 @@ private fun screenTitle(screen: AppScreen): String = when (screen) {
     AppScreen.PRESETS -> "我的预设"
     AppScreen.SETTINGS -> "连接设置"
 }
+
