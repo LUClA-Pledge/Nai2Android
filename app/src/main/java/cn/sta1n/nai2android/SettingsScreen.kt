@@ -221,15 +221,6 @@ fun SettingsScreen(viewModel: NaiViewModel, modifier: Modifier = Modifier) {
             )
         }
 
-        if (viewModel.statusMessage.isNotBlank()) {
-            StudioCard(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                Text(
-                    viewModel.statusMessage,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
         Spacer(Modifier.size(8.dp))
     }
 }
@@ -250,3 +241,4 @@ private fun SettingRow(label: String, value: String) {
         )
     }
 }
+
